@@ -147,5 +147,32 @@ module Steps{
         |(set i | p.pointer <= i < p'.pointer && p.commands[i] == symbols[0])| - |(set i | p.pointer <= i < p'.pointer && p.commands[i] == symbols[1])|
     }
 
+    ghost predicate program_k_max_steps(p: Program, s: State, p': Program, s': State, k: int)
+    decreases k
+    requires 0<= k
+    requires valid_program(p)
+    requires state_reqs(s)
+    {
+    if k==0 then
+        p == p' && s == s' 
+    else 
+        exists p'': Program, s'': State, midPtr: int:: valid_state(s, s'') && state_reqs(s'') && aligned_programs(p, p'') && valid_program(p'') && max_steps(p, s, p'', s'') &&
+        p.pointer < |p.commands| &&
+        program_k_max_steps(p'', s'', p', s', k-1)
+    }
+
+    ghost predicate ir_k_steps(ir: IntermediateRep, s: State, ir': IntermediateRep, s': State, k: int)
+    decreases k
+    requires 0<= k
+    // requires valid_program(p)
+    requires state_reqs(s)
+    {
+    if k==0 then
+        ir == ir' && s == s' 
+    else 
+        exists ir'': IntermediateRep, s'': State :: (valid_state(s, s'') && state_reqs(s'') && in_sync_irs(ir, ir'') && ir_step(ir, s, ir'', s'') &&
+        ir_k_steps(ir'', s'', ir', s', k-1))
+    }
+
 
 }

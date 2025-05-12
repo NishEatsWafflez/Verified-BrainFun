@@ -67,7 +67,9 @@ module Common{
         p.commands == p'.commands && 0<=p.pointer <= |p.commands| && 0 <= p'.pointer <= |p.commands|
     }
 
-
+    predicate in_sync_irs(ir: IntermediateRep, ir': IntermediateRep){
+        ir.commands == ir'.commands
+    }
 
 
 

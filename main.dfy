@@ -30,30 +30,6 @@ import opened Equivalence
 //     // forall s: State:: 0 <= s.pointer < |s.memory| ==> AreEquivalent(p, s, ir)
 // }
 
-// ghost predicate program_k_max_steps(p: Program, s: State, p': Program, s': State, input: seq<char>, inputPtr: int, postPtr: int, k: int)
-// decreases k
-// requires 0<= k
-// requires valid_program(p)
-// requires 0<=inputPtr <= |input|
-// {
-//   if k==0 then
-//     p == p' && s == s' && inputPtr == postPtr
-//   else 
-//     exists p'': Program, s'': State, midPtr: int:: valid_state(s, s'') && aligned_programs(p, p'') && max_steps(p, s, p'', s'') && inputPtr <= midPtr <= |input|&&
-//     p.pointer < |p.commands| &&
-//     program_k_max_steps(p'', s'', p', s', input, midPtr, postPtr, k-1)
-// }
-// ghost predicate Equivalence(p: Program, ir: IntermediateRep, input: seq<char>)
-// requires valid_program(p)
-// {
-//   var s := InitialState();
-//   var inputPtr := 0;
-//   forall i:: 0 <= i < |ir.commands| ==> (exists s': State, p': Program, ir': IntermediateRep, postPtr: int:: 
-//     program_k_max_steps(p, s, p', s', input, inputPtr, postPtr, i)
-//   )
-// }
-
-
 
 method Compile(p: Program, input: seq<char>)  returns (result: IntermediateRep)
   requires valid_program(p)
@@ -61,7 +37,7 @@ method Compile(p: Program, input: seq<char>)  returns (result: IntermediateRep)
   requires p.pointer == 0
   // ensures AreEquivalent(p, InitialState(), result, input, 0)
   ensures |result.commands| > 0 && |p.commands| > 0
-  // ensures equiv_representations(p, result)
+  ensures EquivalentReps(p, InitialState(), result)
 {
   var i: nat := 0;
   var j: int := 0;
@@ -226,7 +202,7 @@ method Compile(p: Program, input: seq<char>)  returns (result: IntermediateRep)
             ir'.commands == compiled_ir.commands &&
             0 <= compiled_ir.pointer < ir'.pointer <= |compiled_ir.commands|;
 
-  // assert AreEquivalent(p, InitialState(), compiled_ir, input);
+  assert EquivalentReps(p, InitialState(), compiled_ir);
   return compiled_ir;
   // return null;
 }

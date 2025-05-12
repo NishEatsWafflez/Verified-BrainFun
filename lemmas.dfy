@@ -108,5 +108,4 @@ lemma AllLessThanLast(s: seq<int>)
 {
 }
 
-
 }
