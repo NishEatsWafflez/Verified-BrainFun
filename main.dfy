@@ -21,7 +21,6 @@ method Compile(p: Program)  returns (result: IntermediateRep)
   requires |p.input| == |p.commands|
   requires p.pointer == 0
   requires valid_input(p.input)
-  requires enough_input(p)
   // ensures AreEquivalent(p, InitialState(), result, input, 0)
   ensures |result.commands| > 0 && |p.commands| > 0
   // ensures EquivalentReps(p, InitialState(), result)
@@ -108,7 +107,7 @@ method Compile(p: Program)  returns (result: IntermediateRep)
         wasIncrementing := false;
         wasMoving := false;
         assert j < |p.input|;
-        commands := commands + [UserInput(p.input[j])];
+        commands := commands + [UserInput()];
         if j == |p.input|-1{
           j := 0;
         }else{
@@ -130,7 +129,7 @@ method Compile(p: Program)  returns (result: IntermediateRep)
         assert |loop_start_stack| >= 1;
         assert loop_start_stack[|loop_start_stack|-1] == |commands|;
         assert |commands| >= 0;
-        commands := commands + [Loop(IntermediateRep([], 0))]; 
+        commands := commands + [Loop(IntermediateRep([], 0, p.input))]; 
         assert 0<= loop_start_stack[|loop_start_stack|-1] < |commands|;
         assert forall i:: 0<=i< |loop_start_stack| ==> 0<= loop_start_stack[i] < |commands|;
 
@@ -153,7 +152,7 @@ method Compile(p: Program)  returns (result: IntermediateRep)
           loop_start_stack := loop_start_stack[0 .. |loop_start_stack| - 1];
           var loop_body := commands[start_index + 1 .. |commands|];
           assert |commands[0..start_index]| == start_index;
-          commands := commands[0 .. start_index] + [Loop(IntermediateRep(loop_body, 0))];
+          commands := commands[0 .. start_index] + [Loop(IntermediateRep(loop_body, 0, p.input))];
           assert (|loop_start_stack|>0) ==> loop_start_stack[|loop_start_stack|-1] < start_index;
           assert (|loop_start_stack|>0) ==> loop_start_stack[|loop_start_stack|-1] <start_index < |commands|;  
           assert (|loop_start_stack| > 0) ==> loop_start_stack[|loop_start_stack| - 1] < |commands|;
@@ -182,7 +181,7 @@ method Compile(p: Program)  returns (result: IntermediateRep)
     commands := commands + [Move(count)];
   }
   assert |p.commands| > 0 ==> |commands| > 0;    
-  var compiled_ir := IntermediateRep(commands, 0);
+  var compiled_ir := IntermediateRep(commands, 0, p.input);
   // ExistsAdvancedIntermediate(compiled_ir);
   // ExistsAdvancedProgram(p);
 
@@ -194,8 +193,16 @@ method Compile(p: Program)  returns (result: IntermediateRep)
   // assert exists s': State :: state_reqs(s');
   var s:= InitialState();
   MaxSteps(p, s);
-  assert exists p': Program, s': State :: valid_program(p') && state_reqs(s') && valid_state(s, s') && aligned_programs(p, p') && max_steps(p, s, p', s');
-  // assert EquivalentReps(p, InitialState(), compiled_ir);
+  // assert exists p': Program, s': State :: valid_program(p') && state_reqs(s') && valid_state(s, s') && aligned_programs(p, p') && max_steps(p, s, p', s');
+  MaxKSteps(p, s, 1);
+  forall k | 0 <= k {
+  // Just reapply the lemma’s ensures manually
+  MaxKSteps(p, s, k);
+}
+  assert forall k:: 0<=k ==> (exists p': Program, s': State ::  
+    valid_program(p') && state_reqs(s') && 
+    program_k_max_steps(p, s, p', s', k));
+  assert EquivalentReps(p, s, compiled_ir);
   return compiled_ir;
   // return null;
 }

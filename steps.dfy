@@ -49,10 +49,9 @@ module Steps{
             case ',' =>
                 (
                     0 <= s.pointer < |s.memory| && s.pointer == s'.pointer && |s.memory| == |s'.memory| 
-                    && |p.input| > 0
                     && (forall i :: 0 <= i < |s.memory| && i != s.pointer ==> (s.memory[i] == s'.memory[i]))
-                    && (s'.memory[s.pointer] == p.input[0] as int) 
-                    && p'.input == p.input[1..]
+                    && (|p.input| > 0 ==> (s'.memory[s.pointer] == p.input[0] as int && p'.input == p.input[1..]))
+                    && (|p.input| == 0 ==> (p'.input == p.input && s'.memory[s.pointer]==' ' as int))
                     && pointer_moved_up(p, p')
                 )
             case default => false
@@ -89,11 +88,12 @@ module Steps{
             case Print =>
                 s == s' //Add more for printing?
                 && ir_moved_up(ir, ir')
-            case UserInput(c) =>
+            case UserInput() =>
                 (
                     0 <= s.pointer < |s.memory| && s.pointer == s'.pointer && |s.memory| == |s'.memory| 
                     && (forall i :: 0 <= i < |s.memory| && i != s.pointer ==> (s.memory[i] == s'.memory[i]))
-                    && (s.memory[s.pointer] == c as int) //FIX WITH USER INPUT
+                    && (|ir.input| > 0 ==> s.memory[s.pointer] == ir.input[0] as int && ir'.input==ir.input[1..])
+                    && (|ir.input| == 0 ==> s.memory[s.pointer] == ' ' as int && ir'.input==ir.input)
                     && ir_moved_up(ir, ir')
                 )
     }

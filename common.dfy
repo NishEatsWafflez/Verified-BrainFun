@@ -1,11 +1,11 @@
 module Common{
     datatype State = StateValue(pointer: int, memory: seq<int>, output: seq<char>)
     datatype Program = Program(commands: seq<char>, pointer: int, input: seq<char>)
-    datatype IntermediateRep = IntermediateRep(commands: seq<Instr>, pointer: int)
+    datatype IntermediateRep = IntermediateRep(commands: seq<Instr>, pointer: int, input: seq<char>)
     datatype Instr =
         | Inc(n: int)
         | Move(n: int)
-        | UserInput(c: char)
+        | UserInput()
         | Print
         | Loop(IntermediateRep)
 
@@ -76,9 +76,9 @@ module Common{
         forall i:: 0 <= i < |input| ==> 0 <= input[i] as int<= 255
     }
 
-    predicate enough_input(p: Program)
-    requires valid_program(p){
-        |p.input| == |(set i | p.pointer <=i < |p.commands| && p.commands[i] == ',')|
-    }
+    // predicate enough_input(p: Program)
+    // requires valid_program(p){
+    //     |p.input| == |(set i | p.pointer <=i < |p.commands| && p.commands[i] == ',')|
+    // }
 
 }
