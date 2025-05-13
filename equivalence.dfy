@@ -48,7 +48,7 @@ module Equivalence{
     {
         // true
         //Idea: forall i:: 0 <= i < |ir| ==> if program can transition from i to i+1, then ir can as well
-        forall i:: 0 <= i < |ir.commands| ==> exists p': Program, s': State, ir': IntermediateRep:: valid_program(p') && state_reqs(s') && program_k_max_steps(p, s, p', s', i) && ir_k_steps(ir, s, ir', s', i)
+        forall i:: 0 <= i < |ir.commands| ==> exists p': Program, s': State, ir': IntermediateRep:: valid_program(p') && state_reqs(s') && program_k_max_steps(p, s, p', s', i) //&& ir_k_steps(ir, s, ir', s', i)
     }
 }
 

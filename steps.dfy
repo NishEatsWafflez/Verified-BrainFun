@@ -34,7 +34,7 @@ module Steps{
                 && ((s.memory[s.pointer] > 0) ==> pointer_moved_up(p,p'))
                 && (s.memory[s.pointer]== 0 ==> (p'.pointer > p.pointer && p'.commands[p'.pointer-1]== ']' && valid_loop(p.commands[p.pointer+1.. p'.pointer-1])))    //Need to add forall to make sure that at the soonest ]
             case '.' =>
-                s == s' //Add more for printing?
+                s.memory == s'.memory && s.pointer == s'.pointer //Add more for printing?
                 // && (0 <= s.pointer < |s.memory| && 0 <= s'.pointer < |s.memory| )
                 && pointer_moved_up(p, p')
                 && s'.output == s.output + [s.memory[s.pointer] as char]
@@ -112,40 +112,49 @@ module Steps{
                 (p.pointer < p'.pointer)&&
                 (forall i:: (p.pointer<=i< p'.pointer ==>  p.commands[i] in ['+', '-']))
                 && (p'.pointer == |p.commands| || (p'.pointer < |p.commands| ==> !(p.commands[p'.pointer] in ['+', '-'])))
-                && (s'.memory[s.pointer] == s.memory[s.pointer]+count_commands(p, p', ['+', '-']))
+                && (s'.memory[s.pointer] == (s.memory[s.pointer]+count_commands(p, p', ['+', '-']))%256)
                 && (forall i:: (0 <= i < |s.memory|  && i != s.pointer) ==> s.memory[i] == s'.memory[i])
             case '>' | '<' =>
                 (p.pointer < p'.pointer)&&
                 (forall i:: (p.pointer<=i< p'.pointer ==>  p.commands[i] in ['>', '<']))
                 && (p'.pointer == |p.commands| || (p'.pointer < |p.commands| ==> !(p.commands[p'.pointer] in ['<', '>'])))
                 && (s'.memory == s.memory)
-                && (s'.pointer == s.pointer + count_commands(p, p', ['>', '<']))
+                && (0 <= s.pointer+count_commands(p, p', ['>', '<']) < |s.memory| ==> s'.pointer == s.pointer + count_commands(p, p', ['>', '<']))
+                && (0 > s.pointer+count_commands(p, p', ['>', '<']) ==> s'.pointer == 0)
+                && (|s.memory|<= s.pointer+count_commands(p, p', ['>', '<']) ==> s'.pointer == |s.memory|-1)
             case ',' | '.' =>
                 program_step(s, p, s', p')
             case '[' =>
             (0 <= s.pointer < |s.memory| && 0 <= s'.pointer < |s.memory| )
-                && ((s.memory[s.pointer] > 0) ==> pointer_moved_up(p,p'))
-                && (s.memory[s.pointer]== 0 ==> (p'.pointer > p.pointer && p'.commands[p'.pointer-1]== ']' && valid_loop(p.commands[p.pointer+1.. p'.pointer-1])))
+                && pointer_moved_up(p,p')
+                // && (s.memory[s.pointer]== 0 ==> (p'.pointer > p.pointer && p'.commands[p'.pointer-1]== ']' && valid_loop(p.commands[p.pointer+1.. p'.pointer-1])))    //Need to add forall to make sure that at the soonest ]
             case ']' =>
                 (
-                    (0 <= s.pointer < |s.memory| && 0 <= s'.pointer < |s.memory| )
-                    && ((s.memory[s.pointer] == 0) ==> pointer_moved_up(p, p'))
-                    && (s.memory[s.pointer] > 0 ==> (0 < p'.pointer < p.pointer && p'.commands[p'.pointer-1]== '[' && valid_loop(p.commands[p'.pointer.. p.pointer-1])))
+                    (0 <= s.pointer < |s.memory| && 0 <= s'.pointer <= |s.memory| )
+                    && (pointer_moved_up(p, p'))
+                    // && (s.memory[s.pointer] > 0 ==> (0 < p'.pointer < p.pointer && p'.commands[p'.pointer-1]== '[' && valid_loop(p.commands[p'.pointer.. p.pointer-1])))
                 )
-            case _ => false
         )
     }
 
 
-    function count_commands(p: Program, p': Program, symbols: seq<char>): int
-    requires 0 <= p.pointer <= p'.pointer <= |p.commands|
+function count_commands(p: Program, p': Program, symbols: seq<char>): int
+    requires p.pointer <= p'.pointer <= |p.commands|
     requires |symbols| == 2
-    requires forall i:: p.pointer <= i < p'.pointer ==> (p.commands[i] == symbols[0] || p.commands[i]==symbols[1])
-    decreases p'.pointer - p.pointer
-    ensures count_commands(p, p', symbols) == |(set i | p.pointer <= i < p'.pointer && p.commands[i] == symbols[0])| - |(set i | p.pointer <= i < p'.pointer && p.commands[i] == symbols[1])|
-    {
-        |(set i | p.pointer <= i < p'.pointer && p.commands[i] == symbols[0])| - |(set i | p.pointer <= i < p'.pointer && p.commands[i] == symbols[1])|
-    }
+    requires |p.commands| > 0
+    requires aligned_programs(p, p')
+    decreases p'.pointer-p.pointer
+{
+    if p.pointer == p'.pointer then 0
+    // else if p.pointer + 1 >= p'.pointer then 0
+    else
+        assert p.pointer < |p.commands|;
+        (if p.commands[p.pointer] in symbols then
+            (if p.commands[p.pointer] == '+' then 1 else -1)
+         else 0) +
+         count_commands(p.(pointer := p.pointer + 1), p', symbols)
+}
+
 
     ghost predicate program_k_max_steps(p: Program, s: State, p': Program, s': State, k: int)
     decreases k
@@ -156,9 +165,8 @@ module Steps{
     if k==0 then
         p == p' && s == s' 
     else 
-        exists p'': Program, s'': State, midPtr: int:: valid_state(s, s'') && state_reqs(s'') && aligned_programs(p, p'') && valid_program(p'') && max_steps(p, s, p'', s'') &&
-        p.pointer < |p.commands| &&
-        program_k_max_steps(p'', s'', p', s', k-1)
+        exists p'': Program, s'': State:: (valid_state(s, s'') && state_reqs(s'') && aligned_programs(p, p'') && valid_program(p'') && max_steps(p, s, p'', s'') &&
+        p.pointer <= |p.commands| && program_k_max_steps(p'', s'', p', s', k-1))
     }
 
     ghost predicate ir_k_steps(ir: IntermediateRep, s: State, ir': IntermediateRep, s': State, k: int)

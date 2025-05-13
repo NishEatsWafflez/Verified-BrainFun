@@ -1,58 +1,385 @@
 include "common.dfy"
+include "steps.dfy"
 module Lemmas{
     import opened Common
-// lemma MaxStepsPlusMinus(p: Program, s: State)
-//   requires 0 <= p.pointer < |p.commands|
-//   requires valid_program(p)
-//   requires p.commands[p.pointer] in ['+', '-']
-//   requires 0 <= s.pointer < |s.memory|
-//   ensures exists p': Program, s': State :: p.commands == p'.commands && |s.memory| == |s'.memory| && 0 <= s'.pointer < |s'.memory|
-//   && 0<= p'.pointer <= |p.commands| && max_steps(p, s, p', s') 
-// {
-//   var p' := Program(p.commands, p.pointer + 1, p.input);
-//   assert p'.commands == p.commands;
-//   var s' := StateValue(s.pointer, s.memory, s.output);
-//   var count := 1;
-//   assert p.commands[p.pointer] == '+' || p.commands[p.pointer] == '-';
-//   // assert p'.pointer == p.pointer + 1;
-//   assert forall i:: p.pointer <= i < p'.pointer ==> i == p.pointer;
-//   assert forall i:: p.pointer <= i < p'.pointer ==> (p.commands[i] == p.commands[p.pointer] );
-//   assert forall i:: p.pointer <= i < p'.pointer ==> (p.commands[i] == '+' || p.commands[i] == '-');
-//   while p'.pointer < |p.commands| && p.commands[p'.pointer] in ['+', '-']
-//     decreases |p.commands| - p'.pointer
-//     invariant p'.commands == p.commands
-//     invariant p'.pointer-1 < |p.commands|
-//     invariant forall i:: i < p'.pointer ==> i < |p.commands|
-//     invariant forall i:: p.pointer <= i < p'.pointer ==> (p.commands[i] == '+' || p.commands[i] == '-')
-//   {
-//     assert p.commands[p'.pointer] == '+' || p.commands[p'.pointer] == '-';
-//     assert forall i:: p.pointer <= i < p'.pointer ==> (p.commands[i] == '+' || p.commands[i] == '-');
-//     assert forall i:: p.pointer <= i <= p'.pointer ==> (p.commands[i] == '+' || p.commands[i] == '-');
+    import opened Steps
 
-//     p' := Program(p'.commands, p'.pointer + 1);
-//     assert forall i:: p.pointer <= i < p'.pointer ==> (p.commands[i] == '+' || p.commands[i] == '-');
-//     count := count + 1;
-//     assert p.commands[p'.pointer-1] == '+' || p.commands[p'.pointer-1] == '-';
-//     // assert forall i:: p.pointer <= i < 
-//   }
-//   assert p'.pointer == |p.commands| || (p'.pointer < |p.commands| && !(p.commands[p'.pointer] in['+', '-']));
-//   assert p'.commands == p.commands;
 
-//   var memory := s.memory;
-//   memory := memory[s.pointer := memory[s.pointer] + count_commands(p, p', ['+', '-'])];
-//   assert |memory| == |s.memory|;
-//   var s'' := StateValue(s.pointer, memory);
-//   assert |s''.memory| == |s'.memory|;
+lemma MaxKSteps(p: Program, s: State, k: int) 
+  requires 0 <= p.pointer <= |p.commands|
+  requires valid_program(p)
+  requires state_reqs(s)
+//   requires enough_input(p)
+  requires valid_input(p.input)
+  requires enough_input(p)
+  requires 0 <= k
+  requires 0 <= s.pointer < |s.memory|
+  requires exists p_next: Program, s_next: State :: 
+    (valid_state(s, s_next) && state_reqs(s_next) && 
+     aligned_programs(p, p_next) && valid_program(p_next) && 
+     max_steps(p, s, p_next, s_next))&& enough_input(p_next) && valid_input(p_next.input)
+  ensures (exists p': Program, s': State ::  
+    valid_program(p') && state_reqs(s') && 
+    program_k_max_steps(p, s, p', s', k)) 
+decreases k
+{
+  if k == 0 {
+    assert program_k_max_steps(p, s, p, s, 0);
+  } else {
+    // var i:= 0;
+    // while i < k
+    // decreases k-i
 
-//   assert p'.commands == p.commands;
-//   assert s'' == StateValue(s.pointer, memory);
-//   assert p' == Program(p.commands, p'.pointer);
-//   assert s == StateValue(s.pointer, s.memory);
-//   assert p == Program(p.commands, p.pointer);
-//   assert exists p'':Program, s': State:: p.commands == p''.commands && |s.memory| == |s'.memory| && 0 <= s'.pointer < |s'.memory|
-//   && 0<= p''.pointer <= |p.commands| && max_steps(p, s, p'', s', input, 0, 0);
-//   assert max_steps(p, s, p', s'', input, 0, 0);
-// }
+    
+        assert exists p_next, s_next :: 
+        (valid_state(s, s_next) && state_reqs(s_next) && 
+        aligned_programs(p, p_next) && valid_program(p_next) && 
+        max_steps(p, s, p_next, s_next));
+
+        var p': Program, s': State :| valid_state(s, s')&& state_reqs(s') && aligned_programs(p, p')&& valid_program(p') && max_steps(p, s, p', s') && valid_input(p'.input) && enough_input(p');
+        // i:=i+1;
+        assert valid_program(p');
+        MaxSteps(p', s');
+        MaxKSteps(p', s', k - 1);
+
+    
+    }
+  }
+
+
+lemma MaxSteps(p: Program, s: State)
+  requires 0 <= p.pointer <= |p.commands|
+  requires valid_program(p)
+  requires state_reqs(s)
+  requires valid_input(p.input)
+  requires enough_input(p)
+  requires 0 <= s.pointer < |s.memory|
+  ensures exists p': Program, s': State ::  valid_program(p') &&  state_reqs(s') &&  valid_state(s, s') &&  aligned_programs(p, p') && max_steps(p, s, p', s') && enough_input(p') && valid_input(p'.input)
+{
+    
+    if p.pointer == |p.commands| {
+        var p' := p;
+        var s' := s;
+        assert (exists p': Program, s': State :: valid_program(p') && state_reqs(s') && valid_state(s, s') && aligned_programs(p, p') && max_steps(p, s, p', s'));
+
+    }else{
+    if p.commands[p.pointer] == '+' || p.commands[p.pointer] == '-' {MaxStepsPlusMinus(p, s);}
+    else if p.commands[p.pointer] in ['>', '<']{   MaxStepsMove(p, s);}
+    else if p.commands[p.pointer] == '.'{   MaxStepsPrint(p, s);}
+    else if p.commands[p.pointer] == ','{   
+        assert p.pointer in (set i | p.pointer <= i < |p.commands| && p.commands[i] == ',');
+
+        // Now prove the set has > 0 elements by giving Dafny a concrete witness
+        var s2 := set i | p.pointer <= i < |p.commands| && p.commands[i] == ',';
+        assert p.pointer in s2;
+        assert |s2| > 0;
+        // enough_input tells us that input length equals that set size
+        assert |p.input| == |(set i | p.pointer <= i < |p.commands| && p.commands[i] == ',')|;
+
+        // So input length is > 0
+        assert |p.input| > 0;
+        MaxStepsInput(p, s);}
+    else if p.commands[p.pointer] == '['{   MaxStepsStartLoop(p, s);}
+    else if p.commands[p.pointer] == ']'{   MaxStepsEndLoop(p, s);}
+    }
+    assert (exists p': Program, s': State :: valid_program(p') && state_reqs(s') && valid_state(s, s') && aligned_programs(p, p') && max_steps(p, s, p', s')&& enough_input(p') && valid_input(p'.input));
+}
+// We want to show that if the CountCommands is equivalent to progressing and adding 1 for every '+' and subtracting 1 for every '-'
+lemma CountCommandsLemma(p: Program, p': Program, symbols: seq<char>)
+requires |symbols| == 2
+requires valid_program(p)
+{
+    var i:= p.pointer;
+    var count := 0;
+    while i < |p.commands| && p.commands[i] in ['+', '-']
+    decreases |p.commands|-i
+    invariant i <= |p.commands|
+    invariant forall j:: p.pointer <= j < i ==> p.commands[j] in ['+', '-']
+    {
+        if p.commands[i] == '+'{
+            count := count + 1;
+        } else{
+            count := count-1;
+        }
+        i := i+1;
+    }
+}
+
+lemma MaxStepsPlusMinus(p: Program, s: State)
+  requires 0 <= p.pointer < |p.commands|
+  requires valid_program(p)
+  requires enough_input(p)
+  requires valid_input(p.input)
+  requires state_reqs(s)
+  requires p.commands[p.pointer] in ['+', '-']
+  requires 0 <= s.pointer < |s.memory|
+  ensures exists p': Program, s': State :: valid_program(p') && state_reqs(s') && valid_state(s, s') && aligned_programs(p, p') && max_steps(p, s, p', s') && enough_input(p') && valid_input(p'.input)
+{
+    var i := p.pointer+1;
+    var count := 0;
+    if p.commands[p.pointer] == '+'{
+        count := 1;
+    } else{
+        count := -1;
+    }
+    while i < |p.commands| && p.commands[i] in ['+', '-']
+    decreases |p.commands|-i
+    invariant i <= |p.commands|
+    invariant forall j:: p.pointer <= j < i ==> p.commands[j] in ['+', '-']
+    {
+        i := i+1;
+    }
+    var mem := s.memory;
+    // var newVal := s.memory[s.pointer];
+    assert enough_input(p);
+    assert forall j:: p.pointer <= j < i ==> p.commands[j] != ',';
+    var s2 := set j| p.pointer <= j < i && p.commands[j]==',';
+    assert forall j:: p.pointer <= j < i ==> (!(j in s2));
+    var s3 := set j | i <= j < |p.commands| && p.commands[j] == ',';
+    var s4 := set j | p.pointer <= j < |p.commands| && p.commands[j]==',';
+    assert s4 == s2+s3;
+    assert |s4| == |s2|+|s3|;
+    // assert forall j :: p.pointer <= j < i ==> !(j in s2);
+    assert |s2|==0;
+    var p' := Program(p.commands, i, p.input);
+    assert enough_input(p');
+    count := count_commands(p, p', ['+', '-']);
+    mem :=   mem[..s.pointer] + [(s.memory[s.pointer]+count)%256] + mem[s.pointer+1..];
+    var s' := StateValue(s.pointer, mem, s.output);
+    assert valid_program(p') && aligned_programs(p, p');
+    assert state_reqs(s');
+    assert (forall i:: (p.pointer<=i< p'.pointer ==>  p.commands[i] in ['+', '-']));
+    assert (p'.pointer == |p.commands| || (p'.pointer < |p.commands| ==> !(p.commands[p'.pointer] in ['+', '-'])));
+    assert (forall i:: (0 <= i < |s.memory|  && i != s.pointer) ==> s.memory[i] == s'.memory[i]);
+    assert count == count_commands(p, p', ['+', '-']);
+    assert enough_input(p') && valid_input(p'.input);
+    assert s'.memory[s.pointer] == (s.memory[s.pointer]+count)%256;
+    assert (s'.memory[s.pointer] == (s.memory[s.pointer]+count_commands(p, p', ['+', '-']))%256);
+    assert max_steps(p, s, p', s');
+}
+
+lemma MaxStepsPrint(p: Program, s: State)
+    requires valid_program(p)
+    requires state_reqs(s)
+    requires enough_input(p)
+    requires valid_input(p.input)
+    requires 0 <= p.pointer < |p.commands|
+    requires p.commands[p.pointer] == '.'
+    ensures exists p': Program, s': State :: valid_program(p') && state_reqs(s') && valid_state(s, s') && aligned_programs(p, p') && max_steps(p, s, p', s') && enough_input(p') && valid_input(p'.input)
+{
+    var out := s.output;
+    out := out + [s.memory[s.pointer] as char];
+    var s' := StateValue(s.pointer, s.memory, out);
+    var p' := Program(p.commands, p.pointer+1, p.input);
+    assert p'.pointer == p.pointer+1;
+    assert p'.commands == p.commands;
+    var i:= p'.pointer;
+    var s2 := set j| p.pointer <= j < i && p.commands[j]==',';
+    assert forall j:: p.pointer <= j < i ==> (!(j in s2));
+    var s3 := set j | i <= j < |p.commands| && p.commands[j] == ',';
+    var s4 := set j | p.pointer <= j < |p.commands| && p.commands[j]==',';
+    assert s4 == s2+s3;
+    assert |s4| == |s2|+|s3|;
+    // assert forall j :: p.pointer <= j < i ==> !(j in s2);
+    assert |s2|==0;
+    assert enough_input(p');
+    assert pointer_moved_up(p, p');
+    assert valid_program(p) && state_reqs(s') && valid_state(s, s') && aligned_programs(p, p) && program_step(s, p, s', p');
+    assert max_steps(p, s, p', s');
+}
+
+lemma MaxStepsInput(p: Program, s: State)
+    requires valid_program(p)
+    requires state_reqs(s)
+    requires 0 <= p.pointer < |p.commands|
+    requires p.commands[p.pointer] == ','
+    requires |p.input| > 0
+    requires enough_input(p)
+
+    requires valid_input(p.input);
+    ensures exists p': Program, s': State :: valid_program(p') && state_reqs(s') && valid_state(s, s') && aligned_programs(p, p') && max_steps(p, s, p', s') &&enough_input(p') && valid_input(p'.input)
+{
+    var mem := s.memory;
+    // var newVal := s.memory[s.pointer];
+    var p' := Program(p.commands, p.pointer+1, p.input[1..]);
+    assert p.input[0] as int <= 255;
+    mem :=   mem[..s.pointer] + [p.input[0] as int] + mem[s.pointer+1..];
+    var s' := StateValue(s.pointer, mem, s.output);
+    assert p'.pointer == p.pointer+1;
+    assert p'.commands == p.commands;
+    var i:= p'.pointer;
+    var s2 := set j| p.pointer <= j < i && p.commands[j]==',';
+    assert forall j:: p.pointer <= j < i ==> j==p.pointer;
+    assert forall j:: p.pointer <= j < i ==> ((j in s2));
+    assert i-p.pointer == 1;
+    assert s2 == {p.pointer};
+    assert |s2| == 1;
+    var s3 := set j | i <= j < |p.commands| && p.commands[j] == ',';
+    var s4 := set j | p.pointer <= j < |p.commands| && p.commands[j]==',';
+    assert s4 == s2+s3;
+    assert |s4| == |s2|+|s3|;
+    // assert forall j :: p.pointer <= j < i ==> !(j in s2);
+    // assert |s2|==0;
+    assert pointer_moved_up(p, p');
+    assert valid_program(p) && state_reqs(s') && valid_state(s, s') && aligned_programs(p, p) && program_step(s, p, s', p');
+    assert max_steps(p, s, p', s');
+}
+
+/*lemma MaxStepsStartLoop(p: Program, s: State)
+    requires valid_program(p)
+    requires state_reqs(s)
+    requires 0 <= p.pointer < |p.commands|-1
+    requires p.commands[p.pointer] == '['
+    // ensures exists p': Program, s': State :: valid_program(p') && state_reqs(s') && valid_state(s, s') && aligned_programs(p, p') && max_steps(p, s, p', s') 
+{
+    assert balanced_brackets(p);
+    if s.memory[s.pointer] > 0{
+        var p' := Program(p.commands, p.pointer+1, p.input);
+        assert valid_program(p') && state_reqs(s) && valid_state(s, s) && aligned_programs(p, p') && max_steps(p, s, p', s);
+    }else{
+        var i := p.pointer+1;
+        var count := 0;
+
+        while (i < |p.commands| && (p.commands[i] != ']' || count != 1))
+            decreases |p.commands|-i
+            invariant i <= |p.commands|
+            // invariant count >= 0
+        {
+            if p.commands[i] == '[' {count := count + 1;}
+            else if p.commands[i] == ']' {count := count - 1;}
+            i := i+1;
+        }
+        assert i < |p.commands|;
+        var p' := Program(p.commands, i+1, p.input);
+    }
+}*/
+
+//  lemma MaxStepsStartLoop(p: Program, s: State)
+//         requires valid_program(p)
+//         requires state_reqs(s)
+//         requires 0 <= p.pointer < |p.commands|-1
+//         requires p.commands[p.pointer] == '['
+//         requires MatchingBracketExists(p.commands, p.pointer)
+//         // ensures exists p': Program, s': State :: valid_program(p') && state_reqs(s') && valid_state(s, s') && aligned_programs(p, p') && max_steps(p, s, p', s') 
+//     {
+//         assert balanced_brackets(p);
+//         if s.memory[s.pointer] > 0{
+//             var p' := Program(p.commands, p.pointer+1, p.input);
+//             assert valid_program(p') && state_reqs(s) && valid_state(s, s) && aligned_programs(p, p') && max_steps(p, s, p', s);
+//         }else{
+//             var index := FindMatchingBracketIndex(p.commands, p.pointer+1)+1;
+//             var p' := Program(p.commands, index, p.input);
+//             assert 0 <= index <= |p.commands|;
+//             assert valid_program(p') && state_reqs(s) && valid_state(s, s) && aligned_programs(p, p') && max_steps(p, s, p', s);
+//         }
+//     }
+lemma MaxStepsStartLoop(p: Program, s: State)
+        requires valid_program(p)
+        requires state_reqs(s)
+        requires 0 <= p.pointer < |p.commands|
+        requires p.commands[p.pointer] == '['
+        requires enough_input(p)
+        requires valid_input(p.input)
+        ensures exists p': Program, s': State :: valid_program(p') && state_reqs(s') && valid_state(s, s') && aligned_programs(p, p') && max_steps(p, s, p', s') &&enough_input(p') && valid_input(p'.input)
+    {
+        var p' := Program(p.commands, p.pointer+1, p.input);
+        var i:= p'.pointer;
+        var s2 := set j| p.pointer <= j < i && p.commands[j]==',';
+        assert forall j:: p.pointer <= j < i ==> (!(j in s2));
+        var s3 := set j | i <= j < |p.commands| && p.commands[j] == ',';
+        var s4 := set j | p.pointer <= j < |p.commands| && p.commands[j]==',';
+        assert s4 == s2+s3;
+        assert |s4| == |s2|+|s3|;
+        // assert forall j :: p.pointer <= j < i ==> !(j in s2);
+        assert |s2|==0;
+        assert enough_input(p');
+        assert pointer_moved_up(p, p');
+
+        assert valid_program(p') && state_reqs(s) && valid_state(s, s) && aligned_programs(p, p') && max_steps(p, s, p', s);
+    }
+
+lemma MaxStepsEndLoop(p: Program, s: State)
+        requires valid_program(p)
+        requires state_reqs(s)
+        requires 0 <= p.pointer < |p.commands|
+        requires p.commands[p.pointer] == ']'
+        requires enough_input(p)
+        requires valid_input(p.input)
+        ensures exists p': Program, s': State :: valid_program(p') && state_reqs(s') && valid_state(s, s') && aligned_programs(p, p') && max_steps(p, s, p', s') &&enough_input(p') && valid_input(p'.input)
+    {
+        var p' := Program(p.commands, p.pointer+1, p.input);
+        var i:= p'.pointer;
+        var s2 := set j| p.pointer <= j < i && p.commands[j]==',';
+        assert forall j:: p.pointer <= j < i ==> (!(j in s2));
+        var s3 := set j | i <= j < |p.commands| && p.commands[j] == ',';
+        var s4 := set j | p.pointer <= j < |p.commands| && p.commands[j]==',';
+        assert s4 == s2+s3;
+        assert |s4| == |s2|+|s3|;
+        // assert forall j :: p.pointer <= j < i ==> !(j in s2);
+        assert |s2|==0;
+        assert enough_input(p');
+        assert pointer_moved_up(p, p');
+
+        assert valid_program(p') && state_reqs(s) && valid_state(s, s) && aligned_programs(p, p') && max_steps(p, s, p', s);
+    }
+
+lemma MaxStepsMove(p: Program, s: State)
+  requires 0 <= p.pointer < |p.commands|
+  requires valid_program(p)
+  requires state_reqs(s)
+  requires p.commands[p.pointer] in ['<', '>']
+  requires 0 <= s.pointer < |s.memory|
+  requires enough_input(p)
+  requires valid_input(p.input)
+  ensures exists p': Program, s': State :: valid_program(p') && state_reqs(s') && valid_state(s, s') && aligned_programs(p, p') && max_steps(p, s, p', s') &&enough_input(p') && valid_input(p'.input)
+{
+    var i := p.pointer+1;
+    var count := 0;
+    if p.commands[p.pointer] == '+'{
+        count := 1;
+    } else{
+        count := -1;
+    }
+    while i < |p.commands| && p.commands[i] in ['>', '<']
+    decreases |p.commands|-i
+    invariant i <= |p.commands|
+    invariant forall j:: p.pointer <= j < i ==> p.commands[j] in ['>', '<']
+    {
+        i := i+1;
+    }
+    var p' := Program(p.commands, i, p.input);
+    assert enough_input(p);
+    assert forall j:: p.pointer <= j < i ==> p.commands[j] != ',';
+    var s2 := set j| p.pointer <= j < i && p.commands[j]==',';
+    assert forall j:: p.pointer <= j < i ==> (!(j in s2));
+    var s3 := set j | i <= j < |p.commands| && p.commands[j] == ',';
+    var s4 := set j | p.pointer <= j < |p.commands| && p.commands[j]==',';
+    assert s4 == s2+s3;
+    assert |s4| == |s2|+|s3|;
+    // assert forall j :: p.pointer <= j < i ==> !(j in s2);
+    assert |s2|==0;
+    
+    count := count_commands(p, p', ['>', '<']);
+    var point := s.pointer;
+    assert 0 <= point;
+    if point + count >= |s.memory|{
+        point := |s.memory|-1;
+    }else if point + count <= 0{
+        point := 0;
+    }else{
+        point := point+count;
+    }
+    assert point < |s.memory|;
+    var s' := StateValue(point, s.memory, s.output);
+    assert valid_program(p') && aligned_programs(p, p');
+    assert state_reqs(s');
+    assert (forall i:: (p.pointer<=i< p'.pointer ==>  p.commands[i] in ['>', '<']));
+    assert (p'.pointer == |p.commands| || (p'.pointer < |p.commands| ==> !(p.commands[p'.pointer] in ['>', '<'])));
+    assert (forall i:: (0 <= i < |s.memory|  && i != s.pointer) ==> s.memory[i] == s'.memory[i]);
+    assert count == count_commands(p, p', ['>', '<']);
+    assert max_steps(p, s, p', s');
+}
+
 lemma ExistsAdvancedProgram(p: Program)
   requires 0 <= p.pointer < |p.commands|
   ensures exists p': Program :: 
@@ -106,6 +433,13 @@ lemma AllLessThanLast(s: seq<int>)
   requires forall i, j :: 0 <= i < j < |s| ==> s[i] < s[j] // Strictly increasing
   ensures forall i :: 0 <= i < |s| ==> s[i] <= s[|s| - 1] // All elements (except the last) are less than the last
 {
+}
+
+lemma ExistsValidState(s: State)
+requires state_reqs(s)
+ensures exists s': State:: state_reqs(s')
+{
+    // exists s': State:: s' == s
 }
 
 }

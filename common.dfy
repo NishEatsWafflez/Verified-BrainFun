@@ -11,10 +11,11 @@ module Common{
 
     function InitialMemory(): seq<int>
     {
-    [0, 0, 0, 0, 0]
+    [0, 0, 0, 0, 0] // TODO: fix to be larger
     }
 
     function InitialState(): State
+    // ensures StateValue(0, InitialMemory(), [])
     {
         StateValue(0, InitialMemory(), [])
     }
@@ -37,12 +38,12 @@ module Common{
     }
 
     predicate balanced_counter(p: seq<char>, counter: int)
-    decreases p
+        decreases p
     {
-        if (|p| == 0) then counter == 0
-        else if p[0] == '[' then balanced_counter(p[1..], counter+1)
-        else if p[0] == ']' then balanced_counter(p[1..], counter+1) && counter > 0
-        else true
+        if |p| == 0 then counter == 0
+        else if p[0] == '[' then balanced_counter(p[1..], counter + 1)
+        else if p[0] == ']' then counter > 0 && balanced_counter(p[1..], counter - 1)
+        else balanced_counter(p[1..], counter)
     }
 
     predicate balanced_brackets(p: Program)
@@ -71,6 +72,13 @@ module Common{
         ir.commands == ir'.commands
     }
 
+    predicate valid_input(input: seq<char>){
+        forall i:: 0 <= i < |input| ==> 0 <= input[i] as int<= 255
+    }
 
+    predicate enough_input(p: Program)
+    requires valid_program(p){
+        |p.input| == |(set i | p.pointer <=i < |p.commands| && p.commands[i] == ',')|
+    }
 
 }

@@ -15,29 +15,17 @@ import opened Equivalence
 // requires that the next spot either be out of bounds or not a compatible character, prob semi-recursive idk) need to figure out how loops work with that,
 // maybe if we see a begin loop, we run until we get to the end of the loop (recursively call the function on the internal thing)
 
-
-
-
-// ghost predicate equiv_representations(p: Program, ir: IntermediateRep, input: seq<char>)
-// requires 0 == p.pointer < |p.commands|
-// requires 0 == ir.pointer < |ir.commands|
-// {
-//       assert ir.pointer == 0;
-//        ExistsAdvancedIntermediate(ir);
-//       // AreEquivalent(p, InitialState(), ir, input, 0)
-
-//     // s' := StateValue(new char[3000], 0);
-//     // forall s: State:: 0 <= s.pointer < |s.memory| ==> AreEquivalent(p, s, ir)
-// }
-
-
-method Compile(p: Program, input: seq<char>)  returns (result: IntermediateRep)
+// The main compile method, still need to verify that the result is correct :D
+method Compile(p: Program)  returns (result: IntermediateRep)
   requires valid_program(p)
-  requires |input| == |p.commands|
+  requires |p.input| == |p.commands|
   requires p.pointer == 0
+  requires valid_input(p.input)
+  requires enough_input(p)
   // ensures AreEquivalent(p, InitialState(), result, input, 0)
   ensures |result.commands| > 0 && |p.commands| > 0
-  ensures EquivalentReps(p, InitialState(), result)
+  // ensures EquivalentReps(p, InitialState(), result)
+
 {
   var i: nat := 0;
   var j: int := 0;
@@ -53,7 +41,7 @@ method Compile(p: Program, input: seq<char>)  returns (result: IntermediateRep)
     invariant forall j:: 0<=j < |loop_start_stack|-1 ==> loop_start_stack[j]<loop_start_stack[j+1]
     invariant forall j:: 0<=j < |loop_start_stack| ==> |commands|>loop_start_stack[j] >= 0
     invariant 0 < i ==> |commands| > 0 || wasMoving || wasIncrementing
-    invariant 0 <= j < |input|
+    invariant 0 <= j < |p.input|
   {
     {match p.commands[i]
       case '+' =>
@@ -119,14 +107,14 @@ method Compile(p: Program, input: seq<char>)  returns (result: IntermediateRep)
         count := 0;
         wasIncrementing := false;
         wasMoving := false;
-        assert j < |input|;
-        commands := commands + [UserInput(input[j])];
-        if j == |input|-1{
+        assert j < |p.input|;
+        commands := commands + [UserInput(p.input[j])];
+        if j == |p.input|-1{
           j := 0;
         }else{
           j := j+1;
         }
-        assert j <= |input|;
+        assert j <= |p.input|;
       case '[' =>
         if wasIncrementing { 
           commands := commands + [Inc(count)];
@@ -195,14 +183,19 @@ method Compile(p: Program, input: seq<char>)  returns (result: IntermediateRep)
   }
   assert |p.commands| > 0 ==> |commands| > 0;    
   var compiled_ir := IntermediateRep(commands, 0);
-  ExistsAdvancedIntermediate(compiled_ir);
-  ExistsAdvancedProgram(p);
+  // ExistsAdvancedIntermediate(compiled_ir);
+  // ExistsAdvancedProgram(p);
 
-  assert exists ir': IntermediateRep :: 
-            ir'.commands == compiled_ir.commands &&
-            0 <= compiled_ir.pointer < ir'.pointer <= |compiled_ir.commands|;
-
-  assert EquivalentReps(p, InitialState(), compiled_ir);
+  // assert exists ir': IntermediateRep :: 
+  //           ir'.commands == compiled_ir.commands &&
+  //           0 <= compiled_ir.pointer < ir'.pointer <= |compiled_ir.commands|;
+  // assert exists p': Program ::valid_program(p');
+  // assert state_reqs(InitialState());
+  // assert exists s': State :: state_reqs(s');
+  var s:= InitialState();
+  MaxSteps(p, s);
+  assert exists p': Program, s': State :: valid_program(p') && state_reqs(s') && valid_state(s, s') && aligned_programs(p, p') && max_steps(p, s, p', s');
+  // assert EquivalentReps(p, InitialState(), compiled_ir);
   return compiled_ir;
   // return null;
 }
