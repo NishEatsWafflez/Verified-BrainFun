@@ -61,6 +61,7 @@ module Steps{
     predicate ir_step(ir: IntermediateRep, s: State,  ir': IntermediateRep, s': State)
     requires |s.memory| == |s'.memory|
     requires ir.commands == ir'.commands
+    requires state_reqs(s)
     {
         0 <= ir.pointer <= ir'.pointer < |ir'.commands| && 
         ir.commands != [] ==> //TODO: how to get user input
@@ -74,26 +75,37 @@ module Steps{
                 0 <= s.pointer < |s.memory| && s.memory == s'.memory && 0 <= s'.pointer < |s.memory| 
                 && ((s.pointer + n >= |s.memory|) ==> s'.pointer == |s.memory|-1)
                 && ((s.pointer + n <= 0) ==> s'.pointer == 0)
-                && ((0 <= s.pointer + n < |s.memory|) ==> s'.pointer == s.pointer+1) 
+                && ((0 <= s.pointer + n < |s.memory|) ==> s'.pointer == s.pointer+n) 
             case Loop(body) => 
-                (0 <= s.pointer < |s.memory| && 0 <= s'.pointer < |s.memory| )
-                && ((s.memory[s.pointer] == 0) ==> ir_moved_up(ir,ir'))
+                // (0 <= s.pointer < |s.memory| && 0 <= s'.pointer < |s.memory| )
+                // // && ((s.memory[s.pointer] == 0) ==> ir_moved_up(ir,ir'))
 
-                && (s.memory[s.pointer] >= 0 ==> 
-                    0 < ir.pointer < |ir.commands| && ir.pointer+1 == ir'.pointer && ir.commands == ir'.commands &&
-                    match ir'.commands[ir.pointer]
-                        case Loop(body') => ir_step(body, s, body, s')
+                // // && (s.memory[s.pointer] >= 0 ==> 
+                // &&    0 < ir.pointer < |ir.commands| && ir.pointer+1 == ir'.pointer && ir.commands == ir'.commands &&
+                //     match ir'.commands[ir.pointer]
+                //         case Loop(body') => ir_step(body, s, body, s')
+                //         case _ => false
+                // // )    //Need to add forall to make sure that at the soonest ]
+                // false
+                
+                    (0 <= s.pointer < |s.memory| && 0 <= s'.pointer < |s.memory| )
+                    &&
+                    ir.pointer == ir'.pointer && ir.input == ir'.input
+                    &&
+                    (match ir'.commands[ir.pointer]
+                        case Loop(body') => ir_step(body, s, body', s')
                         case _ => false
-                )    //Need to add forall to make sure that at the soonest ]
+                    )
+                
             case Print =>
-                s == s' //Add more for printing?
+                s.memory == s'.memory && s.pointer == s'.pointer && s'.output == s.output + [s.memory[s.pointer]as char] //Add more for printing?
                 && ir_moved_up(ir, ir')
-            case UserInput() =>
+            case UserInput =>
                 (
                     0 <= s.pointer < |s.memory| && s.pointer == s'.pointer && |s.memory| == |s'.memory| 
                     && (forall i :: 0 <= i < |s.memory| && i != s.pointer ==> (s.memory[i] == s'.memory[i]))
-                    && (|ir.input| > 0 ==> s.memory[s.pointer] == ir.input[0] as int && ir'.input==ir.input[1..])
-                    && (|ir.input| == 0 ==> s.memory[s.pointer] == ' ' as int && ir'.input==ir.input)
+                    && (|ir.input| > 0 ==> s'.memory[s.pointer] == ir.input[0] as int && ir'.input==ir.input[1..])
+                    && (|ir.input| == 0 ==> s'.memory[s.pointer] == ' ' as int && ir'.input==ir.input)
                     && ir_moved_up(ir, ir')
                 )
     }

@@ -27,6 +27,14 @@ module Common{
         && (forall i:: (0<= i < |p.commands| ==> p.commands[i] in [',', '[', ']', '.', '+', '-', '>', '<']))
         && balanced_brackets(p)
     }
+    predicate valid_ir(ir: IntermediateRep){
+        0<= ir.pointer <= |ir.commands| &&
+        forall j:int :: 0<=j < |ir.commands| ==> (
+            match ir.commands[j] 
+                case Loop(body) => valid_ir(body)
+                case _ => true
+        )
+    }
 
     predicate state_reqs(s: State){
         0 <= s.pointer < |s.memory| && (forall i:: (0<= i < |s.memory|) ==> 0 <= s.memory[i] <= 255)

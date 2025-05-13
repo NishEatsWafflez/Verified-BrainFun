@@ -23,7 +23,7 @@ method Compile(p: Program)  returns (result: IntermediateRep)
   requires valid_input(p.input)
   // ensures AreEquivalent(p, InitialState(), result, input, 0)
   ensures |result.commands| > 0 && |p.commands| > 0
-  // ensures EquivalentReps(p, InitialState(), result)
+  ensures EquivalentReps(p, InitialState(), result)
 
 {
   var i: nat := 0;
