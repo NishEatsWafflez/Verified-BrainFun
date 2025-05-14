@@ -12,7 +12,7 @@ module Equivalence{
     requires 0 <= bf_state.pointer < |bf_state.memory| 
     decreases |bf_program.commands|- bf_program.pointer
     requires 0 <= inputPtr <= |input|
-    requires valid_program(bf_program)
+    requires valid_program(bf_program) 
     requires state_reqs(bf_state)
     ensures !(bf_program.pointer >= |bf_program.commands| && !(ir_program.pointer >= |ir_program.commands|)) || !(!(bf_program.pointer >= |bf_program.commands|) && (ir_program.pointer >= |ir_program.commands|))
         {
@@ -48,7 +48,9 @@ module Equivalence{
     {
         // true
         //Idea: forall i:: 0 <= i < |ir| ==> if program can transition from i to i+1, then ir can as well
-        forall i:: 0 <= i < |ir.commands| ==> exists p': Program, s': State, irS: State, ir': IntermediateRep:: valid_program(p') && state_reqs(s') && state_reqs(irS) //&& program_k_max_steps(p, s, p', s', i) && ir_k_steps(ir, s, ir', irS, i) //&& s'==irS
+        forall i:: 0 <= i < |ir.commands| ==> exists p': Program, s': State, irS: State, ir': IntermediateRep:: valid_program(p') && state_reqs(s')  && program_k_max_steps(p, s, p', s', i) && state_reqs(irS) //&& ir_k_steps(ir, s, ir', irS, i) //&& s'==irS
     }
+
+
 }
 

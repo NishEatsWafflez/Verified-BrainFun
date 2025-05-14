@@ -60,11 +60,14 @@ module Steps{
 
     predicate ir_step(ir: IntermediateRep, s: State,  ir': IntermediateRep, s': State)
     requires |s.memory| == |s'.memory|
-    requires ir.commands == ir'.commands
     requires state_reqs(s)
+    requires 0 <= ir.pointer 
+    requires 0 <= ir'.pointer
+    decreases |ir.commands| - ir.pointer //Need to figure out how to prove decreases or termination as we descend into recursion :0
     {
-        0 <= ir.pointer <= ir'.pointer < |ir'.commands| && 
-        ir.commands != [] ==> //TODO: how to get user input
+        if ir.pointer == |ir.commands| then ir' == ir && s' == s
+        else 
+        (ir.pointer < |ir.commands| && ir.commands != [] ==> //TODO: how to get user input
         match ir.commands[ir.pointer]
             case Inc(n) => 
                 0 <= s.pointer < |s.memory| && s.pointer == s'.pointer && |s.memory| == |s'.memory| 
@@ -76,27 +79,10 @@ module Steps{
                 && ((s.pointer + n >= |s.memory|) ==> s'.pointer == |s.memory|-1)
                 && ((s.pointer + n <= 0) ==> s'.pointer == 0)
                 && ((0 <= s.pointer + n < |s.memory|) ==> s'.pointer == s.pointer+n) 
-            case Loop(body) => 
-                // (0 <= s.pointer < |s.memory| && 0 <= s'.pointer < |s.memory| )
-                // // && ((s.memory[s.pointer] == 0) ==> ir_moved_up(ir,ir'))
-
-                // // && (s.memory[s.pointer] >= 0 ==> 
-                // &&    0 < ir.pointer < |ir.commands| && ir.pointer+1 == ir'.pointer && ir.commands == ir'.commands &&
-                //     match ir'.commands[ir.pointer]
-                //         case Loop(body') => ir_step(body, s, body, s')
-                //         case _ => false
-                // // )    //Need to add forall to make sure that at the soonest ]
-                // false
-                
-                    (0 <= s.pointer < |s.memory| && 0 <= s'.pointer < |s.memory| )
-                    &&
-                    ir.pointer == ir'.pointer && ir.input == ir'.input
-                    &&
-                    (match ir'.commands[ir.pointer]
-                        case Loop(body') => ir_step(body, s, body', s')
-                        case _ => false
-                    )
-                
+            case Jump(dest, direction) =>
+                (ir_moved_up(ir, ir') && ir.commands == ir'.commands && ir.input == ir'.input && s == s') 
+                //Because we want to compare the commands directly, if we are in an equivalent state at the start of the loop and the body is the same
+                // we have an equivalent representation, we can thus just keep progressing normally
             case Print =>
                 s.memory == s'.memory && s.pointer == s'.pointer && s'.output == s.output + [s.memory[s.pointer]as char] //Add more for printing?
                 && ir_moved_up(ir, ir')
@@ -108,6 +94,7 @@ module Steps{
                     && (|ir.input| == 0 ==> s'.memory[s.pointer] == ' ' as int && ir'.input==ir.input)
                     && ir_moved_up(ir, ir')
                 )
+        )
     }
 
     predicate max_steps(p: Program, s: State, p': Program, s': State)
@@ -185,12 +172,18 @@ function count_commands(p: Program, p': Program, symbols: seq<char>): int
     decreases k
     requires 0<= k
     // requires valid_program(p)
+    requires 0 <= ir.pointer
+    requires 0<= ir'.pointer
     requires state_reqs(s)
+    requires valid_ir(ir)
+    requires valid_input(ir.input)
+    requires valid_ir(ir')
+    requires valid_input(ir'.input)
     {
     if k==0 then
         ir == ir' && s == s' 
     else 
-        exists ir'': IntermediateRep, s'': State :: (valid_state(s, s'') && state_reqs(s'') && in_sync_irs(ir, ir'') && ir_step(ir, s, ir'', s'') &&
+        exists ir'': IntermediateRep, s'': State :: (valid_state(s, s'') && state_reqs(s'') && in_sync_irs(ir, ir'') && valid_ir(ir'') && ir_step(ir, s, ir'', s'') && valid_input(ir''.input)&&
         ir_k_steps(ir'', s'', ir', s', k-1))
     }
 

@@ -107,7 +107,7 @@ method Compile(p: Program)  returns (result: IntermediateRep)
         wasIncrementing := false;
         wasMoving := false;
         assert j < |p.input|;
-        commands := commands + [UserInput()];
+        commands := commands + [UserInput];
         if j == |p.input|-1{
           j := 0;
         }else{
@@ -129,7 +129,7 @@ method Compile(p: Program)  returns (result: IntermediateRep)
         assert |loop_start_stack| >= 1;
         assert loop_start_stack[|loop_start_stack|-1] == |commands|;
         assert |commands| >= 0;
-        commands := commands + [Loop(IntermediateRep([], 0, p.input))]; 
+        commands := commands + [Jump(0, true)]; 
         assert 0<= loop_start_stack[|loop_start_stack|-1] < |commands|;
         assert forall i:: 0<=i< |loop_start_stack| ==> 0<= loop_start_stack[i] < |commands|;
 
@@ -152,7 +152,7 @@ method Compile(p: Program)  returns (result: IntermediateRep)
           loop_start_stack := loop_start_stack[0 .. |loop_start_stack| - 1];
           var loop_body := commands[start_index + 1 .. |commands|];
           assert |commands[0..start_index]| == start_index;
-          commands := commands[0 .. start_index] + [Loop(IntermediateRep(loop_body, 0, p.input))];
+          commands := commands[0 .. start_index] + [Jump(|commands|, true)] + commands[start_index+1..] + [Jump(start_index,false)];
           assert (|loop_start_stack|>0) ==> loop_start_stack[|loop_start_stack|-1] < start_index;
           assert (|loop_start_stack|>0) ==> loop_start_stack[|loop_start_stack|-1] <start_index < |commands|;  
           assert (|loop_start_stack| > 0) ==> loop_start_stack[|loop_start_stack| - 1] < |commands|;
@@ -194,15 +194,22 @@ method Compile(p: Program)  returns (result: IntermediateRep)
   var s:= InitialState();
   MaxSteps(p, s);
   // assert exists p': Program, s': State :: valid_program(p') && state_reqs(s') && valid_state(s, s') && aligned_programs(p, p') && max_steps(p, s, p', s');
-  MaxKSteps(p, s, 1);
+  IrStep(compiled_ir, s);
+  MaxKSteps(p, s, 1); 
   forall k | 0 <= k {
-  // Just reapply the lemma’s ensures manually
-  MaxKSteps(p, s, k);
-}
+    MaxKSteps(p, s, k);
+  }
+  forall k | 0 <= k {
+    MaxKIRSteps(compiled_ir, s, k);
+  }
+  assert forall k:: 0<=k ==> (exists ir': IntermediateRep, s': State ::  
+    valid_ir(ir') && state_reqs(s')&& valid_input(ir'.input) && 
+    ir_k_steps(compiled_ir, s, ir', s', k) );  
   assert forall k:: 0<=k ==> (exists p': Program, s': State ::  
     valid_program(p') && state_reqs(s') && 
     program_k_max_steps(p, s, p', s', k));
-  assert EquivalentReps(p, s, compiled_ir);
+
+  assert EquivalentReps(p, s, compiled_ir); 
   return compiled_ir;
   // return null;
 }

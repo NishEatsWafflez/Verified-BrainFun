@@ -5,9 +5,9 @@ module Common{
     datatype Instr =
         | Inc(n: int)
         | Move(n: int)
-        | UserInput()
+        | UserInput
         | Print
-        | Loop(IntermediateRep)
+        | Jump(dest: int, direction: bool) //True is forwards, false is backwards (basically if this should be a backwards jump)
 
     function InitialMemory(): seq<int>
     {
@@ -27,13 +27,10 @@ module Common{
         && (forall i:: (0<= i < |p.commands| ==> p.commands[i] in [',', '[', ']', '.', '+', '-', '>', '<']))
         && balanced_brackets(p)
     }
-    predicate valid_ir(ir: IntermediateRep){
-        0<= ir.pointer <= |ir.commands| &&
-        forall j:int :: 0<=j < |ir.commands| ==> (
-            match ir.commands[j] 
-                case Loop(body) => valid_ir(body)
-                case _ => true
-        )
+
+    predicate valid_ir(ir: IntermediateRep)
+    {
+        0 <= ir.pointer <= |ir.commands|
     }
 
     predicate state_reqs(s: State){
@@ -83,6 +80,7 @@ module Common{
     predicate valid_input(input: seq<char>){
         forall i:: 0 <= i < |input| ==> 0 <= input[i] as int<= 255
     }
+
 
     // predicate enough_input(p: Program)
     // requires valid_program(p){

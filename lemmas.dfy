@@ -4,39 +4,63 @@ module Lemmas{
     import opened Common
     import opened Steps
 
-lemma ForAllKSteps(p: Program, s: State)
-  requires 0 <= p.pointer <= |p.commands|
-  requires valid_program(p)
+lemma MaxKIRSteps(ir: IntermediateRep, s: State, k: int) 
+//   requires 0 <= p.pointer <= |p.commands|
+  requires valid_ir(ir)
   requires state_reqs(s)
 //   requires enough_input(p)
-  requires valid_input(p.input)
+  requires valid_input(ir.input)
 //   requires enough_input(p)
+  requires 0 <= k
   requires 0 <= s.pointer < |s.memory|
-  requires exists p_next: Program, s_next: State :: 
-    (valid_state(s, s_next) && state_reqs(s_next) && 
-     aligned_programs(p, p_next) && valid_program(p_next) && 
-     max_steps(p, s, p_next, s_next)) && valid_input(p_next.input)
-  ensures forall k:: 0<=k ==> (exists p': Program, s': State ::  
-    valid_program(p') && state_reqs(s') && 
-    program_k_max_steps(p, s, p', s', k)) 
+  requires exists ir': IntermediateRep, s': State :: valid_state(s, s') && state_reqs(s') && in_sync_irs(ir, ir') && valid_ir(ir') && ir_step(ir, s, ir', s')&& valid_input(ir'.input)
+  ensures (exists ir': IntermediateRep, s': State ::  
+    valid_ir(ir') && state_reqs(s')&& valid_input(ir'.input) && 
+    ir_k_steps(ir, s, ir', s', k) ) 
+decreases k
 {
-    forall k | 0<=k{
-        MaxKSteps(p, s, k);
+  if k == 0 {
+    assert ir_k_steps(ir, s, ir, s, 0);
+  } else {
+    // var i:= 0;
+    // while i < k
+    // decreases k-i
+
+    
+        assert exists ir': IntermediateRep, s': State :: 
+    valid_state(s, s') && state_reqs(s') && in_sync_irs(ir, ir') && valid_ir(ir') && ir_step(ir, s, ir', s')&& valid_input(ir'.input);
+
+        var ir': IntermediateRep, s': State :| valid_state(s, s') && state_reqs(s') && in_sync_irs(ir, ir') && valid_ir(ir') && ir_step(ir, s, ir', s')&& valid_input(ir'.input);
+ //&& enough_input(p');
+        // i:=i+1;
+
+        assert valid_ir(ir');
+        assert valid_input(ir'.input);
+        IrStep(ir', s');
+
+                    // assume false;
+
+        MaxKIRSteps(ir', s', k - 1);
+
+    
     }
-}
+  }
+
 
 lemma IrStep(ir: IntermediateRep, s: State)
     requires state_reqs(s)
     requires valid_input(ir.input)
     requires valid_ir(ir)
-    decreases |ir.commands| - ir.pointer; //Need to figure out how to prove decreases or termination as we descend into recursion :0
-    // ensures exists ir': IntermediateRep, s': State :: state_reqs(s') && ir_step(ir, s, ir', s')
+    decreases |ir.commands| - ir.pointer //Need to figure out how to prove decreases or termination as we descend into recursion :0
+    ensures exists ir': IntermediateRep, s': State :: valid_state(s, s') && state_reqs(s') && in_sync_irs(ir, ir') && valid_ir(ir') && ir_step(ir, s, ir', s') && valid_input(ir'.input)
 {
     if ir.pointer == |ir.commands| {
         var ir' := ir;
         var s' := s;
         assert state_reqs(s') && ir_step(ir, s, ir', s');
     }else{
+        // assert loop_depth(ir) == 1 ==> (ir.commands[ir.pointer] is Instr);
+
         match ir.commands[ir.pointer]
             case Inc(n) =>{
                 var ir' := IntermediateRep(ir.commands, ir.pointer+1, ir.input);
@@ -44,7 +68,8 @@ lemma IrStep(ir: IntermediateRep, s: State)
                 var mem := s.memory;
                 mem :=   mem[..s.pointer] + [(s.memory[s.pointer]+n)%256] + mem[s.pointer+1..];
                 var s' := StateValue(s.pointer, mem, s.output);
-                assert state_reqs(s') && ir_step(ir, s, ir', s');
+                // assert ir'.commands == ir.commands;
+                assert state_reqs(s') && valid_state(s, s') && ir_step(ir, s, ir', s');
             }
             case Move(n) =>{
                 var ir' := IntermediateRep(ir.commands, ir.pointer+1, ir.input);
@@ -58,14 +83,14 @@ lemma IrStep(ir: IntermediateRep, s: State)
                     pt := pt+n;
                 }
                 var s' := StateValue(pt, s.memory, s.output);
-                assert state_reqs(s') && ir_step(ir, s, ir', s');
+                assert state_reqs(s') && valid_state(s, s') && ir_step(ir, s, ir', s');
                 
             }
             case Print =>{
                 var ir' := IntermediateRep(ir.commands, ir.pointer+1, ir.input);
                 assert ir_moved_up(ir, ir');
                 var s' := StateValue(s.pointer, s.memory, s.output+ [s.memory[s.pointer] as char]);
-                assert state_reqs(s') && ir_step(ir, s, ir', s');
+                assert state_reqs(s') &&valid_state(s, s') && ir_step(ir, s, ir', s');
             }
             case UserInput =>{
                 if |ir.input| == 0{
@@ -76,7 +101,7 @@ lemma IrStep(ir: IntermediateRep, s: State)
                     assert mem[s.pointer] == ' ' as int;
                     var s' := StateValue(s.pointer, mem, s.output);
                     assert s'.memory[s.pointer] == ' ' as int;
-                    assert state_reqs(s') && ir_step(ir, s, ir', s');
+                    assert state_reqs(s') && valid_state(s, s') && ir_step(ir, s, ir', s');
                 } else if |ir.input| > 0{
                     var ir' := IntermediateRep(ir.commands, ir.pointer+1, ir.input[1..]);
                     assert ir_moved_up(ir, ir');
@@ -85,14 +110,16 @@ lemma IrStep(ir: IntermediateRep, s: State)
                     assert mem[s.pointer] == ir.input[0] as int;
                     var s' := StateValue(s.pointer, mem, s.output);
                     assert s'.memory[s.pointer] == ir.input[0] as int;
-                    assert state_reqs(s') && ir_step(ir, s, ir', s');   
+                    assert state_reqs(s') && valid_state(s, s') && ir_step(ir, s, ir', s');   
                 }
             }
-            case Loop(body) =>{
-                // var new_body := IntermediateRep(body.commands, body.pointer, ir.input);
-                // IrStep(new_body, s); //Need to define a predicate that assumes recursively all internal structures are valid :D
-                assert true;
-            }
+            case Jump(dest, direction) =>{
+                var ir' := IntermediateRep(ir.commands, ir.pointer+1, ir.input);
+                assert ir_moved_up(ir, ir');
+                var s' := s;
+                assert state_reqs(s') && valid_state(s, s') && ir_step(ir, s, ir', s');
+            }    
+            
     }
 }
 lemma MaxKSteps(p: Program, s: State, k: int) 
@@ -263,7 +290,7 @@ lemma MaxStepsInput(p: Program, s: State)
     requires 0 <= p.pointer < |p.commands|
     requires p.commands[p.pointer] == ','
 
-    requires valid_input(p.input);
+    requires valid_input(p.input)
     ensures exists p': Program, s': State :: valid_program(p') && state_reqs(s') && valid_state(s, s') && aligned_programs(p, p') && max_steps(p, s, p', s')  && valid_input(p'.input)
 {
     var mem := s.memory;
