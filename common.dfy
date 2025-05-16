@@ -24,7 +24,7 @@ module Common{
     {
     |p.commands| > 0 
         && 0<= p.pointer <= |p.commands|
-        && (forall i:: (0<= i < |p.commands| ==> p.commands[i] in [',', '[', ']', '.', '+', '-', '>', '<']))
+        && (forall i:: (0<= i < |p.commands| ==> p.commands[i] in [',', /*'[', ']',*/ '.', '+', '-', '>', '<']))
         && balanced_brackets(p)
     }
 
@@ -36,6 +36,14 @@ module Common{
     predicate state_reqs(s: State){
         0 <= s.pointer < |s.memory| && (forall i:: (0<= i < |s.memory|) ==> 0 <= s.memory[i] <= 255)
     }
+
+    predicate within_ir_range(i: int, ir: IntermediateRep){
+        0 <= i < |ir.commands|
+    }
+    predicate within_program_range(i: int, p: Program, p': Program){
+        p.pointer <= i < p'.pointer
+    }
+
     predicate valid_loop(p: seq<char>)
 
     {
@@ -86,5 +94,47 @@ module Common{
     // requires valid_program(p){
     //     |p.input| == |(set i | p.pointer <=i < |p.commands| && p.commands[i] == ',')|
     // }
+    ghost predicate matching_pred(s: seq<char>, indices: seq<int>)
+    requires forall i:: 0<= i <= |indices|-1 ==> 0 <= indices[i] < |s|
+    {
+        (|indices| == 0) || (|indices|>0==>
+        // true //TODO: write lol
+        (forall i:: (0<= i < |indices|-1 ==> forall j:: indices[i] <= j < indices[i+1] ==> (s[j] == s[indices[i]] && s[j] != s[indices[i+1]]))) 
+        // &&(forall j:: indices[|indices|-1] <= j < |s| ==> s[j] == s[indices[|indices|-1]])
+    )}
 
+    function Changes(p: Program): seq<int>
+    ensures forall i:: 0<= i< |Changes(p)| ==> 0<= Changes(p)[i] <|p.commands|
+    ensures forall d:: 0<= d <|Changes(p)|-1 && p.commands[Changes(p)[d]] in ['+', '-', '<', '>']==> ((p.commands[Changes(p)[d]]!=p.commands[Changes(p)[d+1]]))
+    // ensures matching_pred(s, Changes(s))
+    {
+        if |p.commands|==0 then []
+        else if 0< |p.commands| <= 1 then [0]
+        else ChangesHelper(p, 0)
+    }
+function count_consecutive_symbols(p: Program, idx: int): nat
+  requires 0 <= idx < |p.commands|
+  ensures idx + count_consecutive_symbols(p, idx) <= |p.commands|
+  ensures idx+count_consecutive_symbols(p, idx) < |p.commands| && (p.commands[idx] in ['+', '-', '<', '>'])==> (p.commands[idx] != p.commands[idx+count_consecutive_symbols(p, idx)])
+  ensures forall j:: idx <= j < idx+count_consecutive_symbols(p, idx) ==> p.commands[j]==p.commands[idx]
+  decreases |p.commands|-idx
+{
+  if idx + 1 < |p.commands| && p.commands[idx] == p.commands[idx + 1] && p.commands[idx] in ['+', '-', '<', '>'] then
+    1 + count_consecutive_symbols(p, idx + 1)
+   else 
+    1
+}
+    function  ChangesHelper(p: Program, i: int): seq<int>
+        requires 0 <= i <= |p.commands|
+        decreases |p.commands|-i
+        ensures i == |p.commands| ==> !(i in ChangesHelper(p, i))
+        ensures forall d:: 0<= d <|ChangesHelper(p, i)| ==> 0<= ChangesHelper(p, i)[d] <|p.commands|
+        ensures forall d:: 0<= d <|ChangesHelper(p, i)|-1 && p.commands[ChangesHelper(p, i)[d]] in ['+', '-', '<', '>']==> ((p.commands[ChangesHelper(p, i)[d]]!=p.commands[ChangesHelper(p, i)[d+1]]))
+        // ensures forall d:: 0<=d<|ChangesHelper(s, i)|-1 ==> forall j:: ChangesHelper(s, i)[d] <= j < ChangesHelper(s, i)[d+1] ==> s[j] != s[ChangesHelper(s, i)[d+1]]
+        // ensures matching_pred(s, ChangesHelper(s, i))
+    {
+        if i == |p.commands| then []
+        else [i] + ChangesHelper(p, i + count_consecutive_symbols(p, i))
+        // else ChangesHelper(s, i + 1)
+    }    
 }
