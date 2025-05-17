@@ -94,7 +94,7 @@ module Steps{
                     && (|ir.input| == 0 ==> s'.memory[s.pointer] == ' ' as int && ir'.input==ir.input)
                     && ir_moved_up(ir, ir') && s'.output == s.output
                 )
-        )
+        ) 
     }
 
     predicate max_steps(p: Program, s: State, p': Program, s': State)
@@ -175,7 +175,7 @@ module Steps{
     requires valid_program(p)
     requires valid_program(p')
     requires aligned_programs(p, p')
-    requires state_reqs(s)
+    requires state_reqs(s) 
     requires state_reqs(s')
     requires valid_state(s, s')
     {

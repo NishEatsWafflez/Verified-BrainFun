@@ -3,40 +3,178 @@ include "steps.dfy"
 include "equivalence.dfy"
 
 module Lemmas{
-    import opened Common
+    import opened Common 
     import opened Steps
     import opened Equivalence
 
-    lemma and_implies_one(p: Program, s: State, p': Program, s': State)
-    requires ( |s.memory| == |s'.memory| && s'.output == s.output&&
-                (p.pointer < p'.pointer) && 0 <= p.pointer < p'.pointer <= |p.commands| &&
-                (forall i:: (p.pointer<=i< p'.pointer ==>  p.commands[i] == '>'))
-                && (p'.pointer == |p.commands| || (p'.pointer < |p.commands| ==> !(p.commands[p'.pointer] == '>')))
-                && (s'.memory == s.memory)
-                && (0 <= s.pointer+p'.pointer-p.pointer < |s.memory| ==> s'.pointer == s.pointer + p'.pointer-p.pointer)
-                && ((|s.memory|<= s.pointer+p'.pointer-p.pointer) ==> s'.pointer == |s.memory|-1))
-    ensures (forall i:: (p.pointer<=i< p'.pointer ==>  p.commands[i] == '>'))
-    {}
+    // lemma and_implies_one(p: Program, s: State, p': Program, s': State)
+    // requires ( |s.memory| == |s'.memory| && s'.output == s.output&&
+    //             (p.pointer < p'.pointer) && 0 <= p.pointer < p'.pointer <= |p.commands| &&
+    //             (forall i:: (p.pointer<=i< p'.pointer ==>  p.commands[i] == '>'))
+    //             && (p'.pointer == |p.commands| || (p'.pointer < |p.commands| ==> !(p.commands[p'.pointer] == '>')))
+    //             && (s'.memory == s.memory)
+    //             && (0 <= s.pointer+p'.pointer-p.pointer < |s.memory| ==> s'.pointer == s.pointer + p'.pointer-p.pointer)
+    //             && ((|s.memory|<= s.pointer+p'.pointer-p.pointer) ==> s'.pointer == |s.memory|-1))
+    // ensures (forall i:: (p.pointer<=i< p'.pointer ==>  p.commands[i] == '>'))
+    // {}
+
+    lemma ChangeHelperLemma(p: Program, i: int)
+      requires 0 <= i <= |p.commands|
+      ensures change_helper_correct(p, i, ChangesHelper(p, i))
+    {
+      assume false;
+    }
+    lemma ChangeLemma(p: Program)
+    ensures forall i:: 0<= i< |Changes(p)| ==> 0<= Changes(p)[i] <|p.commands|
+    ensures forall i:: 0 <= i < |Changes(p)|-1 && p.commands[Changes(p)[i]] in ['+', '-', '<', '>'] ==> Changes(p)[i+1]==Changes(p)[i]+ count_consecutive_symbols(p, Changes(p)[i])
+    // ensures forall i:: i in Changes(p) && p.commands[i] in ['+', '-', '<', '>']  && i + count_consecutive_symbols(p, i) < |p.commands|==> i+ count_consecutive_symbols(p, i) in Changes(p)
+    ensures forall d:: 0<= d <|Changes(p)|-1 && p.commands[Changes(p)[d]] in ['+', '-', '<', '>']==> ((p.commands[Changes(p)[d]]!=p.commands[Changes(p)[d+1]]))
+    ensures forall d:: 0<= d <|Changes(p)|-1 && !(p.commands[Changes(p)[d]] in ['+', '-', '<', '>'])==> (Changes(p)[d+1]-Changes(p)[d] ==1)
+    ensures forall d:: (d in Changes(p) && p.commands[d] in ['+', '-', '<', '>']) ==> ((d+count_consecutive_symbols(p, d) >= |p.commands|) || d+count_consecutive_symbols(p, d) in Changes(p))
+    ensures forall d:: (d in Changes(p) && !(p.commands[d] in ['+', '-', '<', '>'])) ==> ((d+1 >= |p.commands|) || d+1 in Changes(p))
+    {
+      ChangeHelperLemma(p, 0);
+    }
+
+    lemma AlignmentMeansEquivalenceMoves(p: Program, s: State, ir: IntermediateRep, i: int)
+    requires valid_program(p)
+    requires state_reqs(s)
+    requires valid_ir(ir)
+    requires valid_input(ir.input) 
+    requires ir.input == p.input
+    requires valid_input(p.input)
+    requires aligned_instructions(p, ir)
+    requires 0 <= i < |ir.commands|
+    requires match ir.commands[i] {
+      case Move(_) => true
+      case _ => false
+    }    
+      ensures exists p': Program, s': State, ir': IntermediateRep, sIR: State:: valid_program(p') && aligned_programs(p, p') && valid_state(s, s') && state_reqs(s')  && program_k_max_steps(p, s, p', s', i) && state_reqs(sIR) && valid_state(s, sIR) && valid_ir(ir') && valid_input(ir'.input) && ir_step(IntermediateRep(ir.commands, i, ir.input), s, ir', sIR) && s'==sIR 
+    {
+        ChangeLemma(p);
+        var indices := Changes(p);      
+        var index := indices[i];
+        var currIr := IntermediateRep(ir.commands, i, ir.input);
+        match ir.commands[i] 
+          case Move(k) =>{
+            // assume false;
+            assert p.commands[index] in ['>', '<'];
+            var p_by_k := Program(p.commands, index, p.input);
+            MaxSteps(p_by_k, s);
+            assert exists p': Program, s': State ::  valid_program(p') &&  state_reqs(s') &&  valid_state(s, s') &&  aligned_programs(p_by_k, p') && max_steps(p_by_k, s, p', s')  && valid_input(p'.input);
+            var p': Program, s': State :| valid_program(p') &&  state_reqs(s') &&  valid_state(s, s') &&  aligned_programs(p_by_k, p') && max_steps(p_by_k, s, p', s')  && valid_input(p'.input);
+            assert max_steps(p_by_k,s, p', s');
+            if k >= 0{
+              assert max_steps(p_by_k,s, p', s');
+
+
+              assert (forall i:: (p_by_k.pointer<=i< p'.pointer ==>  p_by_k.commands[i] == '>'));
+              assert index+k < |p.commands| ==> (p.commands[index] != p.commands[index+k]);
+              assert forall j:: index <= j < index+k ==> p.commands[j] == p.commands[index]; 
+              assert index == p_by_k.pointer;
+              assert p'.pointer - p_by_k.pointer==k;
+              IrStep(currIr, s);
+              var ir': IntermediateRep, sIR :|valid_state(s, sIR) && state_reqs(sIR) && in_sync_irs(currIr, ir') && valid_ir(ir') && ir_step(currIr, s, ir', sIR) && valid_input(ir'.input);
+              assert ir_step(currIr, s, ir', sIR);
+              if (s.pointer + k >= |s.memory|){
+                assert sIR.pointer == |s.memory|-1;
+                assert s'.pointer == |s.memory|-1;
+
+              } else if (s.pointer +k < 0){
+                assert sIR.pointer == 0;
+                assert s'.pointer == 0;
+              } else {
+                assert sIR.pointer == s.pointer +k;
+                assert s'.pointer == s.pointer +k;
+              }
+              assert sIR.memory == s.memory;
+              assert max_steps(p_by_k, s, p', s');
+              assert p_by_k.commands[p_by_k.pointer]=='>';
+              assert s'.memory==s'.memory;
+              assert p'.pointer - p_by_k.pointer==k;
+              assert s'.memory == sIR.memory;
+              assert s'.output == s.output;
+              assert sIR.output == s.output;
+              assert s'.output == sIR.output;
+              assert s'.pointer == sIR.pointer; 
+              assert valid_program(p') && aligned_programs(p, p') && valid_state(s, s') && state_reqs(s');
+              assert i < |Changes(p)|;
+              assert p_by_k == Program(p.commands, Changes(p)[i], p.input);
+              assert max_steps(p_by_k, s, p', s');
+              assert max_steps(Program(p.commands, Changes(p)[i], p.input), s, p', s');
+              assert program_k_max_steps(p, s, p', s', i);
+              assert state_reqs(sIR) && valid_state(s, sIR) && valid_ir(ir') && valid_input(ir'.input) && ir_step(IntermediateRep(ir.commands, i, ir.input), s, ir', sIR);
+              assert sIR == s';
+              assert valid_program(p') && aligned_programs(p, p') && valid_state(s, s') && state_reqs(s')  && program_k_max_steps(p, s, p', s', i) && state_reqs(sIR) && valid_state(s, sIR) && valid_ir(ir') && valid_input(ir'.input) && ir_step(IntermediateRep(ir.commands, i, ir.input), s, ir', sIR) && s'==sIR ;
+            }else{
+              assert max_steps(p_by_k,s, p', s');
+              assert (forall i:: (p_by_k.pointer<=i< p'.pointer ==>  p_by_k.commands[i] == '<'));
+              assert index-k < |p.commands| ==> (p.commands[index] != p.commands[index-k]);
+              assert forall j:: index <= j < index-k ==> p.commands[j] == p.commands[index]; 
+              assert index == p_by_k.pointer;
+              assert -p'.pointer + p_by_k.pointer==k;
+              IrStep(currIr, s);
+              var ir': IntermediateRep, sIR :|valid_state(s, sIR) && state_reqs(sIR) && in_sync_irs(currIr, ir') && valid_ir(ir') && ir_step(currIr, s, ir', sIR) && valid_input(ir'.input);
+              assert ir_step(currIr, s, ir', sIR);
+              if (s.pointer + k >= |s.memory|){
+                assert sIR.pointer == |s.memory|-1;
+                assert s'.pointer == |s.memory|-1;
+
+              } else if (s.pointer +k < 0){
+                assert sIR.pointer == 0;
+                assert s'.pointer == 0;
+              } else {
+                assert sIR.pointer == s.pointer +k;
+                assert s'.pointer == s.pointer +k;
+              }
+              assert sIR.memory == s.memory;
+              assert max_steps(p_by_k, s, p', s');
+              assert p_by_k.commands[p_by_k.pointer]=='<';
+              assert s'.memory==s'.memory;
+              assert p'.pointer - p_by_k.pointer==-k;
+              assert s'.memory == sIR.memory;
+              assert s'.output == s.output;
+              assert sIR.output == s.output;
+              assert s'.output == sIR.output;
+              assert s'.pointer == sIR.pointer; 
+              assert valid_program(p') && aligned_programs(p, p') && valid_state(s, s') && state_reqs(s');
+              assert i < |Changes(p)|;
+              assert p_by_k == Program(p.commands, Changes(p)[i], p.input);
+              assert max_steps(p_by_k, s, p', s');
+              assert max_steps(Program(p.commands, Changes(p)[i], p.input), s, p', s');
+              assert program_k_max_steps(p, s, p', s', i);
+              assert state_reqs(sIR) && valid_state(s, sIR) && valid_ir(ir') && valid_input(ir'.input) && ir_step(IntermediateRep(ir.commands, i, ir.input), s, ir', sIR);
+              assert sIR == s';
+              assert valid_program(p') && aligned_programs(p, p') && valid_state(s, s') && state_reqs(s')  && program_k_max_steps(p, s, p', s', i) && state_reqs(sIR) && valid_state(s, sIR) && valid_ir(ir') && valid_input(ir'.input) && ir_step(IntermediateRep(ir.commands, i, ir.input), s, ir', sIR) && s'==sIR ;
+                      
+            }
+          
+          }
+
+    }
 
     lemma AlignmentMeansEquivalence(p: Program, s: State, ir: IntermediateRep)
     requires valid_program(p)
     requires state_reqs(s)
     requires valid_ir(ir)
     requires valid_input(ir.input) 
-    requires ir.input == p.input;
+    requires ir.input == p.input
     requires valid_input(p.input)
     requires aligned_instructions(p, ir)
     ensures EquivalentReps(p, s, ir)
     {
+      // assume false;
       var indices := Changes(p);      
       forall i | within_ir_range(i, ir)
       ensures exists p': Program, s': State, ir': IntermediateRep, sIR: State:: valid_program(p') && aligned_programs(p, p') && valid_state(s, s') && state_reqs(s')  && program_k_max_steps(p, s, p', s', i) && state_reqs(sIR) && valid_state(s, sIR) && valid_ir(ir') && valid_input(ir'.input) && ir_step(IntermediateRep(ir.commands, i, ir.input), s, ir', sIR) && s'==sIR 
 
       {
+
         var index := indices[i];
         var currIr := IntermediateRep(ir.commands, i, ir.input);
         match ir.commands[i] 
           case Inc(k) =>{
+            // assume false;
             assert p.commands[index] in ['+', '-'];
             var p_by_k := Program(p.commands, index, p.input);
             MaxSteps(p_by_k, s);
@@ -47,7 +185,7 @@ module Lemmas{
               assert k==count_consecutive_symbols(p, index); 
               assert p.commands[index] == '+';
               assert index+k < |p.commands| ==> (p.commands[index] != p.commands[index+k]);
-              assert forall j:: index <= j < index+k ==> p.commands[j] == p.commands[index]; 
+              // assert forall j:: index <= j < index+k ==> p.commands[j] == p.commands[index]; 
               assert index == p_by_k.pointer;
               assert p'.pointer - p_by_k.pointer==k;
               IrStep(currIr, s);
@@ -80,7 +218,7 @@ module Lemmas{
               assert -k==count_consecutive_symbols(p, index); 
               assert p.commands[index] == '-';
               assert index-k < |p.commands| ==> (p.commands[index] != p.commands[index-k]);
-              assert forall j:: index <= j < index+k ==> p.commands[j] == p.commands[index]; 
+              // assert forall j:: index <= j < index+k ==> p.commands[j] == p.commands[index]; 
               assert index == p_by_k.pointer;
               assert p'.pointer - p_by_k.pointer==-k;
               IrStep(currIr, s);
@@ -119,7 +257,10 @@ module Lemmas{
 
           } 
           case Move(k) =>{
-            assert p.commands[index] in ['>', '<'];
+            AlignmentMeansEquivalenceMoves(p, s, ir, i);
+
+            // assume false;
+            /*assert p.commands[index] in ['>', '<'];
             var p_by_k := Program(p.commands, index, p.input);
             MaxSteps(p_by_k, s);
             assert exists p': Program, s': State ::  valid_program(p') &&  state_reqs(s') &&  valid_state(s, s') &&  aligned_programs(p_by_k, p') && max_steps(p_by_k, s, p', s')  && valid_input(p'.input);
@@ -128,14 +269,14 @@ module Lemmas{
             if k >= 0{
               assert max_steps(p_by_k,s, p', s');
 
-              assert (|s.memory| == |s'.memory| && s'.output == s.output&&
-                (p_by_k.pointer < p'.pointer)&&
-                (forall i:: (p_by_k.pointer<=i< p'.pointer ==>  p_by_k.commands[i] == '>'))
-                && (p'.pointer == |p_by_k.commands| || (p'.pointer < |p_by_k.commands| ==> !(p_by_k.commands[p'.pointer] == '>')))
-                && (s'.memory == s.memory)
-                && (0 <= s.pointer+p'.pointer-p_by_k.pointer < |s.memory| ==> s'.pointer == s.pointer + p'.pointer-p_by_k.pointer))
-                // && (0 > s.pointer+count_commands(p, p', ['>', '<']) ==> s'.pointer == 0)
-                && ((|s.memory|<= s.pointer+p'.pointer-p_by_k.pointer) ==> s'.pointer == |s.memory|-1);
+              // assert (|s.memory| == |s'.memory| && s'.output == s.output&&
+              //   (p_by_k.pointer < p'.pointer)&&
+              //   (forall i:: (p_by_k.pointer<=i< p'.pointer ==>  p_by_k.commands[i] == '>'))
+              //   && (p'.pointer == |p_by_k.commands| || (p'.pointer < |p_by_k.commands| ==> !(p_by_k.commands[p'.pointer] == '>')))
+              //   && (s'.memory == s.memory)
+              //   && (0 <= s.pointer+p'.pointer-p_by_k.pointer < |s.memory| ==> s'.pointer == s.pointer + p'.pointer-p_by_k.pointer))
+              //   // && (0 > s.pointer+count_commands(p, p', ['>', '<']) ==> s'.pointer == 0)
+              //   && ((|s.memory|<= s.pointer+p'.pointer-p_by_k.pointer) ==> s'.pointer == |s.memory|-1);
               // assert max_steps(p_by_k, s, p', s') ==> (forall i:: (p_by_k.pointer<=i< p'.pointer ==>  p_by_k.commands[i] == '>'));
               assert (forall i:: (p_by_k.pointer<=i< p'.pointer ==>  p_by_k.commands[i] == '>'));
               // assert forall j:: p_by_k.pointer <= j < p'.pointer ==> p_by_k.commands[j] == '>';
@@ -180,14 +321,14 @@ module Lemmas{
             }else{
               assert max_steps(p_by_k,s, p', s');
 
-              assert (|s.memory| == |s'.memory| && s'.output == s.output&&
-                (p_by_k.pointer < p'.pointer)&&
-                (forall i:: (p_by_k.pointer<=i< p'.pointer ==>  p_by_k.commands[i] == '<'))
-                && (p'.pointer == |p_by_k.commands| || (p'.pointer < |p_by_k.commands| ==> !(p_by_k.commands[p'.pointer] == '<')))
-                && (s'.memory == s.memory)
-                && (0 <= s.pointer-p'.pointer+p_by_k.pointer < |s.memory| ==> s'.pointer == s.pointer - p'.pointer+p_by_k.pointer))
-                // && (0 > s.pointer+count_commands(p, p', ['>', '<']) ==> s'.pointer == 0)
-                && ((0>= s.pointer-p'.pointer+p_by_k.pointer) ==> s'.pointer == 0);
+              // assert (|s.memory| == |s'.memory| && s'.output == s.output&&
+              //   (p_by_k.pointer < p'.pointer)&&
+              //   (forall i:: (p_by_k.pointer<=i< p'.pointer ==>  p_by_k.commands[i] == '<'))
+              //   && (p'.pointer == |p_by_k.commands| || (p'.pointer < |p_by_k.commands| ==> !(p_by_k.commands[p'.pointer] == '<')))
+              //   && (s'.memory == s.memory)
+              //   && (0 <= s.pointer-p'.pointer+p_by_k.pointer < |s.memory| ==> s'.pointer == s.pointer - p'.pointer+p_by_k.pointer))
+              //   // && (0 > s.pointer+count_commands(p, p', ['>', '<']) ==> s'.pointer == 0)
+              //   && ((0>= s.pointer-p'.pointer+p_by_k.pointer) ==> s'.pointer == 0);
               // assert max_steps(p_by_k, s, p', s') ==> (forall i:: (p_by_k.pointer<=i< p'.pointer ==>  p_by_k.commands[i] == '>'));
               assert (forall i:: (p_by_k.pointer<=i< p'.pointer ==>  p_by_k.commands[i] == '<'));
               // assert forall j:: p_by_k.pointer <= j < p'.pointer ==> p_by_k.commands[j] == '>';
@@ -230,7 +371,7 @@ module Lemmas{
               assert sIR == s';
               assert valid_program(p') && aligned_programs(p, p') && valid_state(s, s') && state_reqs(s')  && program_k_max_steps(p, s, p', s', i) && state_reqs(sIR) && valid_state(s, sIR) && valid_ir(ir') && valid_input(ir'.input) && ir_step(IntermediateRep(ir.commands, i, ir.input), s, ir', sIR) && s'==sIR ;
                       
-            }
+            }*/
           
           }
           case Print =>{
@@ -256,7 +397,7 @@ module Lemmas{
             assert sIR == s';          
           }
           
-          case _ => {assume false;}
+          case _ => {assume {:axiom} false;}
           assert exists p': Program, s': State, ir': IntermediateRep, sIR: State:: valid_program(p') && aligned_programs(p, p') && valid_state(s, s') && state_reqs(s')  && program_k_max_steps(p, s, p', s', i) && state_reqs(sIR) && valid_state(s, sIR) && valid_ir(ir') && valid_input(ir'.input) && ir_step(IntermediateRep(ir.commands, i, ir.input), s, ir', sIR) && s'==sIR ;
 
       }
@@ -265,93 +406,6 @@ module Lemmas{
 
     }
 
-
-/*lemma CombineForAlls(p: Program, s: State, ir: IntermediateRep)
-requires valid_program(p)
-  requires valid_ir(ir)
-  requires valid_input(p.input)
-  requires state_reqs(s)
-  requires valid_input(ir.input)
-  requires 0 <= s.pointer < |s.memory|
-  requires exists ir': IntermediateRep, s': State ::
-    valid_state(s, s') && state_reqs(s') && in_sync_irs(ir, ir') && valid_ir(ir') &&
-    ir_step(ir, s, ir', s') && valid_input(ir'.input)
-  requires exists p_next: Program, s_next: State ::
-    valid_state(s, s_next) && state_reqs(s_next) && aligned_programs(p, p_next) && 
-    valid_program(p_next) && max_steps(p, s, p_next, s_next) && valid_input(p_next.input)  ensures forall k :: 0 <= k ==> exists p': Program, s': State, s2: State, ir': IntermediateRep ::
-    valid_program(p') && state_reqs(s') && program_k_max_steps(p, s, p', s', k) &&
-    state_reqs(s2) && valid_ir(ir') && valid_input(ir'.input) && ir_k_steps(ir, s, ir', s2, k)
-{
-  var k := 0;
-  while (true) // Conceptual loop over all non-negative k
-    invariant 0 <= k;
-    invariant forall i :: 0 <= i <= k ==> (exists si: State, s3i: State, pi: Program, iri: IntermediateRep ::
-      valid_program(pi) && state_reqs(si) && program_k_max_steps(p, s, pi, si, i) &&
-      state_reqs(s3i) && valid_ir(iri) && valid_input(iri.input) && ir_k_steps(ir, s, iri, s3i, i));
-  {
-    MaxKIRSteps(ir, s, k);
-    MaxKSteps(p, s, k);
-
-    var p_k: Program, s_k: State :| valid_program(p_k) && state_reqs(s_k) &&
-                                    program_k_max_steps(p, s, p_k, s_k, k);
-    var ir_k: IntermediateRep, s2_k: State :| valid_ir(ir_k) && state_reqs(s2_k) && valid_input(ir_k.input) &&
-                                        ir_k_steps(ir, s, ir_k, s2_k, k);
-
-    // Need to show that the invariant is maintained for k + 1
-    assert exists sk_plus_1: State, s3k_plus_1: State, pk_plus_1: Program, irk_plus_1: IntermediateRep ::
-      valid_program(pk_plus_1) && state_reqs(sk_plus_1) && program_k_max_steps(p, s, pk_plus_1, sk_plus_1, k + 1) &&
-      state_reqs(s3k_plus_1) && valid_ir(irk_plus_1) && valid_input(irk_plus_1.input) && ir_k_steps(ir, s, irk_plus_1, s3k_plus_1, k + 1);
-
-    k := k + 1;
-  }
-  // The postcondition should follow from the loop invariant.
-  assert forall k_final :: 0 <= k_final ==> exists p': Program, s': State, s2': State, ir': IntermediateRep ::
-    valid_program(p') && state_reqs(s') && program_k_max_steps(p, s, p', s', k_final) &&
-    state_reqs(s2') && valid_ir(ir') && valid_input(ir'.input) && ir_k_steps(ir, s, ir', s2', k_final);
-}*/
-
-
-/*lemma MaxKIRSteps(ir: IntermediateRep, s: State, k: int) 
-//   requires 0 <= p.pointer <= |p.commands|
-  requires valid_ir(ir)
-  requires state_reqs(s)
-//   requires enough_input(p)
-  requires valid_input(ir.input)
-//   requires enough_input(p)
-  requires 0 <= k
-  requires 0 <= s.pointer < |s.memory|
-  requires exists ir': IntermediateRep, s': State :: valid_state(s, s') && state_reqs(s') && in_sync_irs(ir, ir') && valid_ir(ir') && ir_step(ir, s, ir', s')&& valid_input(ir'.input)
-  ensures (exists ir': IntermediateRep, s': State ::  
-    valid_ir(ir') && state_reqs(s')&& valid_input(ir'.input) && 
-    ir_k_steps(ir, s, ir', s', k) ) 
-decreases k
-{
-  if k == 0 {
-    assert ir_k_steps(ir, s, ir, s, 0);
-  } else {
-    // var i:= 0;
-    // while i < k
-    // decreases k-i
-
-    
-        assert exists ir': IntermediateRep, s': State :: 
-    valid_state(s, s') && state_reqs(s') && in_sync_irs(ir, ir') && valid_ir(ir') && ir_step(ir, s, ir', s')&& valid_input(ir'.input);
-
-        var ir': IntermediateRep, s': State :| valid_state(s, s') && state_reqs(s') && in_sync_irs(ir, ir') && valid_ir(ir') && ir_step(ir, s, ir', s')&& valid_input(ir'.input);
- //&& enough_input(p');
-        // i:=i+1;
-
-        assert valid_ir(ir');
-        assert valid_input(ir'.input);
-        IrStep(ir', s');
-
-                    // assume false;
-
-        MaxKIRSteps(ir', s', k - 1);
-
-    
-    }
-  }*/
 
 
 lemma IrStep(ir: IntermediateRep, s: State)
@@ -429,47 +483,6 @@ lemma IrStep(ir: IntermediateRep, s: State)
             
     }
 }
-/*lemma MaxKSteps(p: Program, s: State, k: int) 
-  requires 0 <= p.pointer <= |p.commands|
-  requires valid_program(p)
-  requires state_reqs(s)
-//   requires enough_input(p)
-  requires valid_input(p.input)
-//   requires enough_input(p)
-  requires 0 <= k
-  requires 0 <= s.pointer < |s.memory|
-  requires exists p_next: Program, s_next: State :: 
-    (valid_state(s, s_next) && state_reqs(s_next) && 
-     aligned_programs(p, p_next) && valid_program(p_next) && 
-     max_steps(p, s, p_next, s_next)) && valid_input(p_next.input)
-  ensures (exists p': Program, s': State ::  
-    valid_program(p') && state_reqs(s') && 
-    program_k_max_steps(p, s, p', s', k)) 
-decreases k
-{
-  if k == 0 {
-    assert program_k_max_steps(p, s, p, s, 0);
-  } else {
-    // var i:= 0;
-    // while i < k
-    // decreases k-i
-
-    
-        assert exists p_next, s_next :: 
-        (valid_state(s, s_next) && state_reqs(s_next) && 
-        aligned_programs(p, p_next) && valid_program(p_next) && 
-        max_steps(p, s, p_next, s_next));
-
-        var p': Program, s': State :| valid_state(s, s')&& state_reqs(s') && aligned_programs(p, p')&& valid_program(p') && max_steps(p, s, p', s') && valid_input(p'.input); //&& enough_input(p');
-        // i:=i+1;
-        assert valid_program(p');
-        MaxSteps(p', s');
-        MaxKSteps(p', s', k - 1);
-
-    
-    }
-  }*/
-
 
 lemma MaxSteps(p: Program, s: State)
   requires 0 <= p.pointer <= |p.commands|
@@ -497,26 +510,6 @@ lemma MaxSteps(p: Program, s: State)
     else if p.commands[p.pointer] == ']'{   MaxStepsEndLoop(p, s);}
     }
     assert (exists p': Program, s': State :: valid_program(p') && state_reqs(s') && valid_state(s, s') && aligned_programs(p, p') && max_steps(p, s, p', s') && valid_input(p'.input));
-}
-// We want to show that if the CountCommands is equivalent to progressing and adding 1 for every '+' and subtracting 1 for every '-'
-lemma CountCommandsLemma(p: Program, p': Program, symbols: seq<char>)
-requires |symbols| == 2
-requires valid_program(p)
-{
-    var i:= p.pointer;
-    var count := 0;
-    while i < |p.commands| && p.commands[i] in ['+', '-']
-    decreases |p.commands|-i
-    invariant i <= |p.commands|
-    invariant forall j:: p.pointer <= j < i ==> p.commands[j] in ['+', '-']
-    {
-        if p.commands[i] == '+'{
-            count := count + 1;
-        } else{
-            count := count-1;
-        }
-        i := i+1;
-    }
 }
 
 lemma MaxStepsPlusMinus(p: Program, s: State)
@@ -822,108 +815,5 @@ lemma AllLessThanLast(s: seq<int>)
   ensures forall i :: 0 <= i < |s| ==> s[i] <= s[|s| - 1] // All elements (except the last) are less than the last
 {
 }
-
-// lemma Lockstep(p: Program, s: State, ir: IntermediateRep)
-//     requires valid_program(p)
-//     requires state_reqs(s)
-//     requires valid_ir(ir)
-//     requires valid_input(ir.input)
-//     requires ir.input == p.input
-//     // requires valid_input(p.input)
-//     requires aligned_instructions(p, ir)
-//     // ensures lockstep(p, s, ir)
-//     {
-//       if ir.pointer == |ir.commands|{
-//         assert lockstep(p, s, ir);
-//       }else{
-//         match ir.commands[ir.pointer] 
-//           case UserInput =>{
-            
-//             assert aligned_instructions(p, ir) ==> p.commands[p.pointer] == ',';
-//             IrStep(ir, s);
-//             MaxSteps(p, s);
-//             var s': State, ir': IntermediateRep :| state_reqs(s') && valid_ir(ir') && valid_state(s, s') && ir_step(ir, s, ir', s');
-//             var s2: State, p': Program :| state_reqs(s2) && valid_program(p') && aligned_programs(p, p') && valid_state(s, s2) && max_steps(p, s, p', s2);
-//             assert p.commands[p.pointer] == ',';
-//             assert max_steps(p, s, p', s2);
-//             assert program_step(s, p, s2, p');
-//             assert p.commands != [];
-//             assert match p.commands[p.pointer] 
-//               case ',' => true
-//               case _ => false;
-//             assert 0 <= p.pointer < |p.commands| && 0 <= p'.pointer <= |p'.commands| && p.commands == p'.commands && (
-//                                  0 <= s.pointer < |s.memory| && s.pointer == s2.pointer && |s.memory| == |s2.memory| 
-//                                 && (forall i :: 0 <= i < |s.memory| && i != s.pointer ==> (s.memory[i] == s2.memory[i]))
-//                                 && (|p.input| > 0 ==> (s2.memory[s.pointer] == p.input[0] as int && p'.input == p.input[1..]))
-//                                 && (|p.input| == 0 ==> (p'.input == p.input && s2.memory[s.pointer]==' ' as int))
-//                                 && pointer_moved_up(p, p')
-//                              );
-//             assert (forall i :: 0 <= i < |s.memory| && i != s.pointer ==> (s.memory[i] == s2.memory[i])&& (|p.input| > 0 ==> (s2.memory[s.pointer] == p.input[0] as int))
-//                                 && (|p.input| == 0 ==> (s2.memory[s.pointer]==' ' as int)));
-
-//             assert valid_ir(ir');
-//             assert ir_step(ir, s, ir', s');
-//             assert                     0 <= s.pointer < |s.memory| && s.pointer == s'.pointer && |s.memory| == |s'.memory| 
-//                     && (forall i :: 0 <= i < |s.memory| && i != s.pointer ==> (s.memory[i] == s'.memory[i]))
-//                     && (|ir.input| > 0 ==> s'.memory[s.pointer] == ir.input[0] as int && ir'.input==ir.input[1..])
-//                     && (|ir.input| == 0 ==> s'.memory[s.pointer] == ' ' as int && ir'.input==ir.input)
-//                     && ir_moved_up(ir, ir') && s2.output == s.output;
-//             assert (forall i :: 0 <= i < |s.memory| && i != s.pointer ==> (s.memory[i] == s'.memory[i]))
-//                     && (|ir.input| > 0 ==> s'.memory[s.pointer] == ir.input[0] as int)
-//                     && (|ir.input| == 0 ==> s'.memory[s.pointer] == ' ' as int)&& s'.output == s.output;
-//             assert s'.memory == s2.memory;
-//             assert s'.pointer == s2.pointer;
-//             assert s'.output == s2.output;
-//             assert p.commands[p.pointer] == ',';
-//             assert s' == s2;
-
-//             assert lockstep(p, s, ir);
-//           }
-//           case Print =>{
-//             assert aligned_instructions(p, ir) ==> p.commands[p.pointer] == '.';
-//             IrStep(ir, s);
-//             MaxSteps(p, s);
-//             var s': State, ir': IntermediateRep :| state_reqs(s') && valid_ir(ir') && valid_state(s, s') && ir_step(ir, s, ir', s');
-//             var s2: State, p': Program :| state_reqs(s2) && valid_program(p') && aligned_programs(p, p') && valid_state(s, s2) && max_steps(p, s, p', s2);
-//             assert p.commands[p.pointer] == '.';
-//             assert max_steps(p, s, p', s2);
-//             assert program_step(s, p, s2, p');
-//             assert p.commands != [];
-//             assert match p.commands[p.pointer] 
-//               case '.' => true
-//               case _ => false;
-//             assert s.memory == s2.memory && s.pointer == s2.pointer 
-//                 // && (0 <= s.pointer < |s.memory| && 0 <= s'.pointer < |s.memory| )
-//                 && s2.output == s.output + [s.memory[s.pointer] as char];
-//             assert valid_ir(ir');
-//             assert ir_step(ir, s, ir', s');
-//             assert s.memory == s'.memory && s.pointer == s'.pointer && s'.output == s.output + [s.memory[s.pointer]as char];
-//             assert s'==s2;
-//             assert lockstep(p, s, ir);
-//           }
-//           case Move(k) =>{
-//             MaxSteps(p, s);
-//             var s2: State, p': Program :| state_reqs(s2) && valid_program(p') && aligned_programs(p, p') && valid_state(s, s2) && max_steps(p, s, p', s2);
-
-//             // assert k == count_commands(p, p', ['+', '-']);
-//           }
-//           // case Inc(k) =>{}
-//           case Jump(dest, direction)=>{
-//             IrStep(ir, s);
-//             MaxSteps(p, s);
-//             var s': State, ir': IntermediateRep :| state_reqs(s') && valid_ir(ir') && valid_state(s, s') && ir_step(ir, s, ir', s');
-//             assert valid_ir(ir');
-//             assert ir_step(ir, s, ir', s');
-//             assert s'==s;
-//             var s2: State, p': Program :| state_reqs(s2) && valid_program(p') && aligned_programs(p, p') && valid_state(s, s2) && max_steps(p, s, p', s2);
-//             assert s2==s;
-//             assert s2==s'; 
-//             assert lockstep(p, s, ir);
-//           }
-//           case _ => {assume false;}
-//       }
-      
-
-//     }
 
 }

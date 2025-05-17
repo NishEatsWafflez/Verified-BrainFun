@@ -38,7 +38,7 @@ module Equivalence{
                 && ir_step(ir_program, bf_state, next_ir, next_bf_state) && AreEquivalent(next_bf_program, next_bf_state, next_ir, input, postPtr)
             
             else
-                false
+                false 
         }
 
 

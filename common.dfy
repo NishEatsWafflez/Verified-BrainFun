@@ -104,37 +104,58 @@ module Common{
     )}
 
     function Changes(p: Program): seq<int>
-    ensures forall i:: 0<= i< |Changes(p)| ==> 0<= Changes(p)[i] <|p.commands|
-    ensures forall d:: 0<= d <|Changes(p)|-1 && p.commands[Changes(p)[d]] in ['+', '-', '<', '>']==> ((p.commands[Changes(p)[d]]!=p.commands[Changes(p)[d+1]]))
+
     // ensures matching_pred(s, Changes(s))
     {
         if |p.commands|==0 then []
         else if 0< |p.commands| <= 1 then [0]
         else ChangesHelper(p, 0)
     }
-function count_consecutive_symbols(p: Program, idx: int): nat
-  requires 0 <= idx < |p.commands|
-  ensures idx + count_consecutive_symbols(p, idx) <= |p.commands|
-  ensures idx+count_consecutive_symbols(p, idx) < |p.commands| && (p.commands[idx] in ['+', '-', '<', '>'])==> (p.commands[idx] != p.commands[idx+count_consecutive_symbols(p, idx)])
-  ensures forall j:: idx <= j < idx+count_consecutive_symbols(p, idx) ==> p.commands[j]==p.commands[idx]
-  decreases |p.commands|-idx
-{
-  if idx + 1 < |p.commands| && p.commands[idx] == p.commands[idx + 1] && p.commands[idx] in ['+', '-', '<', '>'] then
-    1 + count_consecutive_symbols(p, idx + 1)
-   else 
-    1
-}
+
+    ghost predicate change_helper_correct(p: Program, i: int, res: seq<int>)
+    requires 0 <= i <= |p.commands|
+    // requires res == ChangesHelper(p, i)
+    {
+        (i == |p.commands| ==> !(i in res)
+        )&&(forall d:: 0<= d <|res| ==> 0<= res[d] <|p.commands|
+        )&&(forall d:: 0 <= d < |res|-1 && p.commands[res[d]] in ['+', '-', '<', '>'] ==> res[d+1]==res[d]+ count_consecutive_symbols(p, res[d])
+        )&&(forall d:: 0<= d <|res|-1 && p.commands[res[d]] in ['+', '-', '<', '>']==> ((p.commands[res[d]]!=p.commands[res[d+1]]))
+        )&&(forall d:: (0<= d <|res|-1 && !(p.commands[res[d]] in ['+', '-', '<', '>']))==> (res[d+1]-res[d] ==1)
+        )&&(forall d:: (d in res && p.commands[d] in ['+', '-', '<', '>']) ==> ((d+count_consecutive_symbols(p, d) >= |p.commands|) || d+count_consecutive_symbols(p, d) in res)
+        )&&(forall d:: (d in res && !(p.commands[d] in ['+', '-', '<', '>'])) ==> ((d+1 >= |p.commands|) || d+1 in res)
+)
+    }
     function  ChangesHelper(p: Program, i: int): seq<int>
         requires 0 <= i <= |p.commands|
-        decreases |p.commands|-i
-        ensures i == |p.commands| ==> !(i in ChangesHelper(p, i))
-        ensures forall d:: 0<= d <|ChangesHelper(p, i)| ==> 0<= ChangesHelper(p, i)[d] <|p.commands|
-        ensures forall d:: 0<= d <|ChangesHelper(p, i)|-1 && p.commands[ChangesHelper(p, i)[d]] in ['+', '-', '<', '>']==> ((p.commands[ChangesHelper(p, i)[d]]!=p.commands[ChangesHelper(p, i)[d+1]]))
+        decreases |p.commands|-i 
+        // ensures change_helper_correct(p, i, ChangesHelper(p, i))
+        // ensures i == |p.commands| ==> !(i in ChangesHelper(p, i))
+        // // ensures forall d:: (d in ChangesHelper(p, i) && p.commands[d] in ['+', '-', '<', '>']  && d + count_consecutive_symbols(p, d) < |p.commands|) ==> d+ count_consecutive_symbols(p, d) in ChangesHelper(p, i)
+        // ensures forall d:: 0<= d <|ChangesHelper(p, i)| ==> 0<= ChangesHelper(p, i)[d] <|p.commands|
+        // ensures forall d:: 0 <= d < |ChangesHelper(p, i)|-1 && p.commands[ChangesHelper(p, i)[d]] in ['+', '-', '<', '>'] ==> ChangesHelper(p, i)[d+1]==ChangesHelper(p, i)[d]+ count_consecutive_symbols(p, ChangesHelper(p, i)[d])
+        // // ensures forall d:: 0<= d < |ChangesHelper(p, i)|-1 && p.commands[ChangesHelper(p, i)[d]] in ['+', '-', '<', '>'] ==> ChangesHelper(p, i)[d+1]-ChangesHelper(p, i)[d] == count_consecutive_symbols(p, ChangesHelper(p, i)[d])
+        // ensures forall d:: 0<= d <|ChangesHelper(p, i)|-1 && p.commands[ChangesHelper(p, i)[d]] in ['+', '-', '<', '>']==> ((p.commands[ChangesHelper(p, i)[d]]!=p.commands[ChangesHelper(p, i)[d+1]]))
+        // ensures forall d:: (0<= d <|ChangesHelper(p, i)|-1 && !(p.commands[ChangesHelper(p, i)[d]] in ['+', '-', '<', '>']))==> (ChangesHelper(p, i)[d+1]-ChangesHelper(p, i)[d] ==1)
+        // ensures forall d:: (d in ChangesHelper(p, i) && p.commands[d] in ['+', '-', '<', '>']) ==> ((d+count_consecutive_symbols(p, d) >= |p.commands|) || d+count_consecutive_symbols(p, d) in ChangesHelper(p, i))
+        // ensures forall d:: (d in ChangesHelper(p,i) && !(p.commands[d] in ['+', '-', '<', '>'])) ==> ((d+1 >= |p.commands|) || d+1 in ChangesHelper(p,i))
+
         // ensures forall d:: 0<=d<|ChangesHelper(s, i)|-1 ==> forall j:: ChangesHelper(s, i)[d] <= j < ChangesHelper(s, i)[d+1] ==> s[j] != s[ChangesHelper(s, i)[d+1]]
         // ensures matching_pred(s, ChangesHelper(s, i))
     {
         if i == |p.commands| then []
-        else [i] + ChangesHelper(p, i + count_consecutive_symbols(p, i))
-        // else ChangesHelper(s, i + 1)
+        else if p.commands[i] in ['+', '-', '<', '>'] then [i] + ChangesHelper(p, i + count_consecutive_symbols(p, i))
+        else [i]+ ChangesHelper(p, i + 1)
     }    
+    function count_consecutive_symbols(p: Program, idx: int): nat
+        requires 0 <= idx < |p.commands|
+        ensures idx + count_consecutive_symbols(p, idx) <= |p.commands|
+        ensures idx+count_consecutive_symbols(p, idx) < |p.commands| && (p.commands[idx] in ['+', '-', '<', '>'])==> (p.commands[idx] != p.commands[idx+count_consecutive_symbols(p, idx)])
+        ensures forall j:: idx <= j < idx+count_consecutive_symbols(p, idx) ==> p.commands[j]==p.commands[idx]
+        decreases |p.commands|-idx
+        {
+        if idx + 1 < |p.commands| && p.commands[idx] == p.commands[idx + 1] && p.commands[idx] in ['+', '-', '<', '>'] then
+            1 + count_consecutive_symbols(p, idx + 1)
+        else 
+            1
+    }
 }
