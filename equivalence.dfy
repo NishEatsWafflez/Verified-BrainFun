@@ -66,23 +66,62 @@ module Equivalence{
         ir_step(ir, s, ir', s')     
     }
 
- 
+ghost predicate matched_forall_loop(p: Program, ir: seq<Instr>, changes: seq<int>, bound: int)
+requires valid_program(p)
+requires changes == Changes(p)
+requires 0<= bound <= |changes|
+requires 0<= bound <= |ir|
+requires forall k:: 0<= k < |changes| ==> 0<= changes[k] < |p.commands|
+{
+    forall k:: within_bounds(k, bound) ==> matched_command_with_ir(p, ir, k, changes)
+}
+ghost predicate within_bounds(k: int, b: int){
+    0<=k<b
+}
+
+ghost predicate matched_command_with_ir(p: Program, ir: seq<Instr>, index: int, changes: seq<int>)
+requires valid_program(p)
+requires changes == Changes(p)
+requires 0<= index < |changes|
+requires 0<= index < |ir|
+requires 0<= changes[index] < |p.commands|
+{
+match ir[index]
+    case Inc(k) => 
+    ((k>= 0 ==> ((p.commands[changes[index]]=='+') && k==count_consecutive_symbols(p, changes[index]))) && (k<0 ==> (p.commands[changes[index]]=='-')&&(-k)==count_consecutive_symbols(p, changes[index])))
+    case Move(k) => 
+        ((k>= 0 ==> ((p.commands[changes[index]]=='>') && k==count_consecutive_symbols(p, changes[index]))) && (k<0 ==> (p.commands[changes[index]]=='<')&&(-k)==count_consecutive_symbols(p, changes[index])))
+    case UserInput => p.commands[changes[index]] == ','
+    case Print => p.commands[changes[index]] == '.'
+    case Jump(dest, direction) => ((p.commands[changes[index]] == ']' && direction == false) || (p.commands[changes[index]] == '[' && direction == true))
+}
+
+ghost predicate aligned_instructions_subseq(p: Program, ir: seq<Instr>)
+    // requires forall i:: 0 <= i < |p.commands| ==> 0<= Changes(p)[i] < |p.commands|
+    requires valid_program(p)
+    // requires valid_ir(ir)
+    {
+        (|Changes(p)| >= |ir|)
+        && forall i:: 0<=i<|ir| ==>(
+            0<=Changes(p)[i] < |p.commands| &&
+            matched_command_with_ir(p, ir, i, Changes(p))
+        )
+        // (p.pointer == |p.commands| && ir.pointer == |ir.commands|) ||
+        // (p.pointer < |p.commands| && ir.pointer < |ir.commands| &&
+        
+        //  )
+    } 
+
+
 ghost predicate aligned_instructions(p: Program, ir: IntermediateRep)
+    // requires forall i:: 0 <= i < |p.commands| ==> 0<= Changes(p)[i] < |p.commands|
     requires valid_program(p)
     requires valid_ir(ir)
     {
         (|Changes(p)| == |ir.commands|)
         && forall i:: 0<=i<|ir.commands| ==>(
             0<=Changes(p)[i] < |p.commands| &&
-               match ir.commands[i]
-                case Inc(k) => (p.commands[Changes(p)[i]] in ['+', '-'] && (k>= 0 ==> ((p.commands[Changes(p)[i]]=='+') && k==count_consecutive_symbols(p, Changes(p)[i]))) && (k<0 ==> (p.commands[Changes(p)[i]]=='-')&&(-k)==count_consecutive_symbols(p, Changes(p)[i]))
-                )
-                case Move(k) => 
-                (p.commands[Changes(p)[i]] in ['>', '<'] && (k>= 0 ==> ((p.commands[Changes(p)[i]]=='>') && k==count_consecutive_symbols(p, Changes(p)[i]))) && (k<0 ==> (p.commands[Changes(p)[i]]=='<')&&(-k)==count_consecutive_symbols(p, Changes(p)[i])))
-                case UserInput => p.commands[Changes(p)[i]] == ','
-                case Print => p.commands[Changes(p)[i]] == '.'
-                case Jump(dest, direction) => ((p.commands[Changes(p)[i]] == ']' && direction == false) || (p.commands[Changes(p)[i]] == '[' && direction == true))
-        
+            matched_command_with_ir(p, ir.commands, i, Changes(p))
         )
         // (p.pointer == |p.commands| && ir.pointer == |ir.commands|) ||
         // (p.pointer < |p.commands| && ir.pointer < |ir.commands| &&
