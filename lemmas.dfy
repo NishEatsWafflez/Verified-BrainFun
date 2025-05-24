@@ -70,27 +70,7 @@ module Lemmas{
       // }
     }
 
-    lemma ChangesHelperMerge(p: Program, i: int, res: seq<int>)
-    requires 0 <= i < |p.commands|
-    decreases |p.commands|-i
-    requires res == ChangesHelper(p, i)
-    requires p.commands[i] in ['+', '-', '<', '>']
-    ensures change_helper_correct(p, i, res)
-    {
-      var k := count_consecutive_symbols(p, i);
-      var temp := ChangesHelper(p, i+k);
-      ChangeHelperLemma(p, i+k, temp);
-      assert change_helper_correct(p, i+k, temp);
-      assert temp == res[1..];
-      if i < |res|-1{
-        assert res[1] == res[0] + k && p.commands[res[0]]!= p.commands[res[1]];
-      }
-      assert (forall d:: 0 <= d < |res|-1 && p.commands[res[d]] in ['+', '-', '<', '>'] ==> (res[d+1]==res[d]+ count_consecutive_symbols(p, res[d]) && ((p.commands[res[d]]!=p.commands[res[d+1]]))));
-      assume false;
 
-
-
-    }
     lemma testingChangeHelper(p: Program, i: int, res: seq<int>)
       requires 0 <= i <= |p.commands|
       decreases |p.commands|-i
@@ -103,37 +83,251 @@ module Lemmas{
         }
 
       }
+    /*
+            (i < |p.commands| ==> (
+        (forall d:: 0<= d <|res| ==> 0<= res[d] <|p.commands|)
+        &&
+        (forall d:: 0 <= d < |res|-1 && p.commands[res[d]] in ['+', '-', '<', '>'] ==> (res[d+1]==res[d]+ count_consecutive_symbols(p, res[d]) && ((p.commands[res[d]]!=p.commands[res[d+1]]))))
+        &&
+        (forall d:: (0<= d <|res|-1 && !(p.commands[res[d]] in ['+', '-', '<', '>']))==> (res[d+1]-res[d] ==1))
+        &&
+        (forall d:: (d in res && p.commands[d] in ['+', '-', '<', '>']) ==> ((d+count_consecutive_symbols(p, d) == |p.commands|) || d+count_consecutive_symbols(p, d) in res))
+        &&
+        (forall d:: (d in res && !(p.commands[d] in ['+', '-', '<', '>'])) ==> ((d+1 == |p.commands|) || d+1 in res)
+))
+    */
+    lemma ZeroAndRest(p: Program, i: int, res: seq<int>, temp: seq<int>)
+    requires 0 <= i < |p.commands|
+    requires |res| > 0
+    requires res[0]==i
+    requires forall d:: d in res ==> 0<=d < |p.commands|
+    requires temp == ChangesHelper(p, i+1)
+    requires change_helper_correct(p, i+1, temp)
+    requires temp == res[1..]
+    requires !(p.commands[i] in ['+', '-', '>', '<'])
+    requires (forall d:: (d in res[1..] && !(p.commands[d] in ['+', '-', '<', '>'])) ==> ((d+1 == |p.commands|) || d+1 in res[1..]))
+    requires (!(p.commands[res[0]] in ['+', '-', '<', '>'])) ==> res[0] + 1 == |p.commands| || res[0]+1 in temp
+    ensures (forall d:: (d in res && !(p.commands[d] in ['+', '-', '<', '>'])) ==> ((d+1 == |p.commands| && !(d+1 in res)) || (d+1 < |p.commands| && d+1 in res)))
+    {
+      forall d| d in res
+      ensures !(p.commands[d] in ['+', '-', '<', '>']) ==> ((d+1 == |p.commands| && !(d+1 in res)) || (d+1 < |p.commands| && d+1 in res))
+      {
+        if d in res[1..]{
+          if !(p.commands[d] in ['+', '-', '<', '>']){
+            assert ((d+1 == |p.commands|) || d+1 in res[1..]);
+            assert ((d+1 == |p.commands|) || d+1 in res);
+          }
+        }
+        else if d == res[0]{
+          if !(p.commands[d] in ['+', '-', '<', '>']){
+            assert ((d+1 == |p.commands|) || d+1 in temp);
+            assert ((d+1 == |p.commands|) || d+1 in res[1..]);
+            assert ((d+1 == |p.commands|) || d+1 in res);
+          }
+        }
+      }
+    }
+
+    lemma ZeroAndRestBigStep(p: Program, i: int, res: seq<int>, temp: seq<int>, k:int)
+    requires 0 <= i < |p.commands|
+    requires |res| > 0
+    requires res[0]==i
+    requires k == count_consecutive_symbols(p, i);
+    requires temp == ChangesHelper(p, i+k)
+    requires change_helper_correct(p, i+k, temp)
+    requires temp == res[1..]
+    requires (p.commands[i] in ['+', '-', '>', '<'])
+    requires (forall d:: (d in res[1..] && p.commands[d] in ['+', '-', '<', '>']) ==> ((d+count_consecutive_symbols(p, d) == |p.commands|) || d+count_consecutive_symbols(p, d) in res[1..]))
+    requires ((p.commands[res[0]] in ['+', '-', '<', '>'])) ==> res[0] + k == |p.commands| || res[0]+k in temp
+     ensures (forall d:: (d in res && (p.commands[d] in ['+', '-', '<', '>'])) ==> ((d+count_consecutive_symbols(p, d) == |p.commands| && !(d+count_consecutive_symbols(p, d) in res)) || (d+count_consecutive_symbols(p, d) < |p.commands| && d+count_consecutive_symbols(p, d) in res)))
+    {
+      forall d| d in res
+      ensures (p.commands[d] in ['+', '-', '<', '>']) ==> ((d+count_consecutive_symbols(p, d) == |p.commands| && !(d+count_consecutive_symbols(p, d) in res)) || (d+count_consecutive_symbols(p, d) < |p.commands| && d+count_consecutive_symbols(p, d) in res))
+      {
+        if d in res[1..]{
+          if (p.commands[d] in ['+', '-', '<', '>']){
+            assert ((d+count_consecutive_symbols(p, d) == |p.commands|) || d+count_consecutive_symbols(p, d) in res[1..]);
+            assert ((d+count_consecutive_symbols(p, d) == |p.commands|) || d+count_consecutive_symbols(p, d) in res);
+          }
+        }
+        else if d == res[0]{
+          if (p.commands[d] in ['+', '-', '<', '>']){
+            assert ((d+count_consecutive_symbols(p, d) == |p.commands|) || d+count_consecutive_symbols(p, d) in temp);
+            assert ((d+count_consecutive_symbols(p, d) == |p.commands|) || d+count_consecutive_symbols(p, d) in res[1..]);
+            assert ((d+count_consecutive_symbols(p, d) == |p.commands|) || d+count_consecutive_symbols(p, d) in res);
+          }
+        }
+      }
+    }
+
+    lemma ChangeHelperRecursive(p: Program, i: int, res: seq<int>, temp: seq<int>)
+    requires 0 <= i < |p.commands|
+    requires |res| > 0
+    requires res[0]==i
+    requires temp == ChangesHelper(p, i+1)
+    requires change_helper_correct(p, i+1, temp)
+    requires temp == res[1..]
+    requires !(p.commands[i] in ['+', '-', '>', '<'])
+    ensures change_helper_correct(p, i, res)
+    {
+      if |temp| > 0{
+        assert temp[0] == i+1;
+        assert res[1] == i+1;
+      }
+
+      assert (forall d:: (d in temp && !(p.commands[d] in ['+', '-', '<', '>'])) ==> ((d+1 == |p.commands| && !(d+1 in temp)) || (d+1 < |p.commands| && d+1 in temp)));
+      assert (forall d:: (d in res[1..] && !(p.commands[d] in ['+', '-', '<', '>'])) ==> ((d+1 == |p.commands|) || d+1 in res[1..]));
+      assert (!(p.commands[res[0]] in ['+', '-', '<', '>'])) ==> res[0] + 1 == |p.commands| || res[0]+1 in temp;
+      ZeroAndRest(p, i, res, temp);
+      assert (forall d:: (d in res && !(p.commands[d] in ['+', '-', '<', '>'])) ==> ((d+1 == |p.commands| && !(d+1 in res)) || (d+1 < |p.commands| && d+1 in res)));
+      assert (forall d:: (0<= d <|temp|-1 && !(p.commands[temp[d]] in ['+', '-', '<', '>']))==> (temp[d+1]-temp[d] ==1));
+      assert (forall d:: (0<= d <|res|-1 && !(p.commands[res[d]] in ['+', '-', '<', '>']))==> (res[d+1]-res[d] ==1));
+      assert (forall d:: 0 <= d < |temp|-1 && p.commands[temp[d]] in ['+', '-', '<', '>'] ==> (temp[d+1]==temp[d]+ count_consecutive_symbols(p, temp[d]) && ((p.commands[temp[d]]!=p.commands[temp[d+1]]))));
+      assert (forall d:: 0 <= d < |res|-1 && p.commands[res[d]] in ['+', '-', '<', '>'] ==> (res[d+1]==res[d]+ count_consecutive_symbols(p, res[d]) && ((p.commands[res[d]]!=p.commands[res[d+1]]))));
+
+      assert (forall d:: (d in temp && p.commands[d] in ['+', '-', '<', '>']) ==> ((d+count_consecutive_symbols(p, d) == |p.commands|) || d+count_consecutive_symbols(p, d) in temp));
+      forall d | d in res
+      ensures p.commands[d] in ['+', '-', '<', '>'] ==> ((d+count_consecutive_symbols(p, d) == |p.commands|) || d+count_consecutive_symbols(p, d) in res)
+      {
+        if d in res[1..]{
+          assert d in temp;
+          assert p.commands[d] in ['+', '-', '<', '>'] ==> ((d+count_consecutive_symbols(p, d) == |p.commands|) || d+count_consecutive_symbols(p, d) in temp);
+          assert p.commands[d] in ['+', '-', '<', '>'] ==> ((d+count_consecutive_symbols(p, d) == |p.commands|) || d+count_consecutive_symbols(p, d) in res[1..]);
+          assert p.commands[d] in ['+', '-', '<', '>'] ==> ((d+count_consecutive_symbols(p, d) == |p.commands|) || d+count_consecutive_symbols(p, d) in res);
+        }else{
+          assert !(p.commands[d] in ['+', '-', '<', '>']);
+        }
+      }
+      assert (forall d:: (d in res && p.commands[d] in ['+', '-', '<', '>']) ==> ((d+count_consecutive_symbols(p, d) == |p.commands|) || d+count_consecutive_symbols(p, d) in res));
+
+      assert i+1 == |p.commands| || i+1 in temp;
+      // ChangesHelperMerge(p, i, res);
+
+      // assert temp == res[1..];
+
+      assert change_helper_correct(p, i, res);        
+    }
+    lemma BigStepHelper(p: Program, i: int, res: seq<int>, temp: seq<int>, k: int)
+    requires 0 <= i < |p.commands|
+    requires |res| > 0
+    requires res[0]==i
+    requires k == count_consecutive_symbols(p, i);
+    requires temp == ChangesHelper(p, i+k)
+    requires change_helper_correct(p, i+k, temp)
+    requires temp == res[1..]
+    requires (p.commands[i] in ['+', '-', '>', '<'])
+    requires (forall d:: (0<= d <|temp|-1 && !(p.commands[temp[d]] in ['+', '-', '<', '>']))==> (temp[d+1]-temp[d] ==1))
+    ensures forall d:: (0<= d < |res|-1 && !(p.commands[res[d]] in ['+', '-', '<', '>'])) ==> (res[d+1]-res[d]==1)
+    {
+      forall d | 0 <= d < |res|-1
+        ensures !(p.commands[res[d]] in ['+', '-', '<', '>']) ==> (res[d+1]-res[d]==1)
+      {
+        if d==0{
+          assert p.commands[res[d]] in ['+', '-', '<', '>'];
+        }else{
+          assert temp == res[1..];
+          assert temp[d-1]==res[d];
+          assert !(p.commands[temp[d-1]] in ['+', '-', '<', '>'])==> (temp[d]-temp[d-1] ==1);
+          assert !(p.commands[res[d]] in ['+', '-', '<', '>']) ==> (res[d+1]-res[d]==1);
+        }
+      }
+    }
+
+    lemma ChangeHelperRecursiveBigStep(p: Program, i: int, res: seq<int>, temp: seq<int>, k: int)
+    requires 0 <= i < |p.commands|
+    requires |res| > 0
+    requires res[0]==i
+    requires k == count_consecutive_symbols(p, i);
+    requires temp == ChangesHelper(p, i+k)
+    requires change_helper_correct(p, i+k, temp)
+    requires temp == res[1..]
+    requires (p.commands[i] in ['+', '-', '>', '<'])
+    ensures change_helper_correct(p, i, res)
+    {
+      if |temp| > 0{
+        assert temp[0] == i+k;
+        assert res[1] == i+k;
+        assert res[1] != res[0];
+      }
+      assert (forall d:: (d in temp && p.commands[d] in ['+', '-', '<', '>']) ==> ((d+count_consecutive_symbols(p, d) == |p.commands|) || d+count_consecutive_symbols(p, d) in temp));
+      assert (forall d:: (d in res[1..] && p.commands[d] in ['+', '-', '<', '>']) ==> ((d+count_consecutive_symbols(p, d) == |p.commands|) || d+count_consecutive_symbols(p, d) in res[1..]));
+      assert ((p.commands[res[0]] in ['+', '-', '<', '>'])) ==> res[0] + k == |p.commands| || res[0]+k in temp;
+      ZeroAndRestBigStep(p, i, res, temp, k);
+      assert (forall d:: (d in res && (p.commands[d] in ['+', '-', '<', '>'])) ==> ((d+count_consecutive_symbols(p, d) == |p.commands| && !(d+count_consecutive_symbols(p, d) in res)) || (d+count_consecutive_symbols(p, d) < |p.commands| && d+count_consecutive_symbols(p, d) in res)));
+
+      assert (forall d:: (0<= d <|temp|-1 && !(p.commands[temp[d]] in ['+', '-', '<', '>']))==> (temp[d+1]-temp[d] ==1));
+      BigStepHelper(p, i, res, temp, k);
+      assert (forall d:: (0<= d <|res|-1 && !(p.commands[res[d]] in ['+', '-', '<', '>']))==> (res[d+1]-res[d] ==1));
+      assert (forall d:: 0 <= d < |temp|-1 && p.commands[temp[d]] in ['+', '-', '<', '>'] ==> (temp[d+1]==temp[d]+ count_consecutive_symbols(p, temp[d]) && ((p.commands[temp[d]]!=p.commands[temp[d+1]]))));
+      assert (forall d:: 0 <= d < |res|-1 && p.commands[res[d]] in ['+', '-', '<', '>'] ==> (res[d+1]==res[d]+ count_consecutive_symbols(p, res[d]) && ((p.commands[res[d]]!=p.commands[res[d+1]]))));
+      assert (forall d:: (d in temp && !(p.commands[d] in ['+', '-', '<', '>'])) ==> ((d+1 == |p.commands|) || d+1 in temp));
+      
+      forall d | d in res
+      ensures !(p.commands[d] in ['+', '-', '<', '>']) ==> ((d+1 == |p.commands| && !(d+1 in res)) || (d+1 < |p.commands| && d+1 in res))
+      {
+        if d in res[1..]{
+          assert d in temp;
+          assert !(p.commands[d] in ['+', '-', '<', '>']) ==> ((d+1 == |p.commands| && !(d+1 in temp)) || (d+1 < |p.commands| && d+1 in temp));
+          assert !(p.commands[d] in ['+', '-', '<', '>']) ==> ((d+1 == |p.commands| && !(d+1 in res[1..])) || (d+1 < |p.commands| && d+1 in res[1..]));
+          assert !(p.commands[d] in ['+', '-', '<', '>']) ==> ((d+1 == |p.commands| && !(d+1 in res)) || (d+1 < |p.commands| && d+1 in res));
+        }else{
+          assert (p.commands[d] in ['+', '-', '<', '>']);
+        }
+      }
+
+      assert (forall d:: (d in res && !(p.commands[d] in ['+', '-', '<', '>'])) ==> ((d+1 == |p.commands| && !(d+1 in res)) || (d+1 < |p.commands| && d+1 in res)));
+      // assert i+1 == |p.commands| || i+1 in temp;
+      // ChangesHelperMerge(p, i, res);
+
+      // assert temp == res[1..];
+
+      assert change_helper_correct(p, i, res);        
+    }
+
+
+
+
     lemma ChangeHelperLemma(p: Program, i: int, res: seq<int>)
       requires 0 <= i <= |p.commands|
       decreases |p.commands|-i
       requires res == ChangesHelper(p, i)
       ensures change_helper_correct(p, i, res)
     {
-      assume false;
       if i == |p.commands|{
         assert res == [];
         assert !(i in res);
+        assert change_helper_correct(p, i, res);
+
       }
       else if i < |p.commands| && p.commands[i] in ['+', '-', '<', '>']{
-        assume false;
-
+        assert res[0] == i;
         var k := count_consecutive_symbols(p, i);
         var temp := ChangesHelper(p, i+k);
-        // ChangesHelperMerge(p, i, res);
-
-        // ChangeHelperLemma(p, i+k, temp);
+        ChangeHelperLemma(p, i+k, temp);
+        assert change_helper_correct(p, i+k, temp);
+        ChangeHelperRecursiveBigStep(p, i, res, temp, k);
+        assert change_helper_correct(p, i, res);
         // assert (forall d:: (d in res && p.commands[d] in ['+', '-', '<', '>']) ==> ((d+count_consecutive_symbols(p, d) >= |p.commands|) || d+count_consecutive_symbols(p, d) in res));
 
         // (forall d:: (d in res && p.commands[d] in ['+', '-', '<', '>']) ==> ((d+count_consecutive_symbols(p, d) >= |p.commands|) || d+count_consecutive_symbols(p, d) in res))
       }else{
+        assert res[0] == i;
         var k := 1;
         var temp := ChangesHelper(p, i+k);
         ChangeHelperLemma(p, i+k, temp);
         assert change_helper_correct(p, i+k, temp);
-        assert temp == res[1..];
-        
-        assert (forall d:: 0 <= d < |res|-1 && !(p.commands[res[d]] in ['+', '-', '<', '>']) ==> (res[d+1]==res[d]+ 1) );
-        // (forall d:: (d in res && p.commands[d] in ['+', '-', '<', '>']) ==> ((d+count_consecutive_symbols(p, d) >= |p.commands|) || d+count_consecutive_symbols(p, d) in res))
+        ChangeHelperRecursive(p, i, res, temp);
+
+
+        // if |temp| > 0{
+        //   assert temp[0] == i+k;
+        //   // assert p.commands[temp[0]] != p.commands[i]; 
+        // }
+        // assert i+k == |p.commands| || i+k in temp;
+        // // ChangesHelperMerge(p, i, res);
+
+        // assert temp == res[1..];
+        assert change_helper_correct(p, i, res);        // (forall d:: (d in res && p.commands[d] in ['+', '-', '<', '>']) ==> ((d+count_consecutive_symbols(p, d) >= |p.commands|) || d+count_consecutive_symbols(p, d) in res))
       }
       // assert forall d:: 0<= d <|res| ==> 0<= res[d] <|p.commands|;
       // assert forall d:: 0 <= d < |res|-1 && p.commands[res[d]] in ['+', '-', '<', '>'] ==> res[d+1]==res[d]+ count_consecutive_symbols(p, res[d]);

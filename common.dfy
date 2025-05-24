@@ -126,6 +126,7 @@ module Common{
         (i == |p.commands| ==> !(i in res))
         &&
         (i < |p.commands| ==> (
+        (i in res && res[0]==i) &&
         (forall d:: 0<= d <|res| ==> 0<= res[d] <|p.commands|)
         &&
         (forall d:: 0 <= d < |res|-1 && p.commands[res[d]] in ['+', '-', '<', '>'] ==> (res[d+1]==res[d]+ count_consecutive_symbols(p, res[d]) && ((p.commands[res[d]]!=p.commands[res[d+1]]))))
@@ -134,7 +135,7 @@ module Common{
         &&
         (forall d:: (d in res && p.commands[d] in ['+', '-', '<', '>']) ==> ((d+count_consecutive_symbols(p, d) == |p.commands|) || d+count_consecutive_symbols(p, d) in res))
         &&
-        (forall d:: (d in res && !(p.commands[d] in ['+', '-', '<', '>'])) ==> ((d+1 == |p.commands|) || d+1 in res)
+        (forall d:: (d in res && !(p.commands[d] in ['+', '-', '<', '>'])) ==> ((d+1 == |p.commands| && !(d+1 in res)) || (d+1 < |p.commands| && d+1 in res))
 ))
         )
     }
