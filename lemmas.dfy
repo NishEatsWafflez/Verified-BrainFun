@@ -96,6 +96,38 @@ module Lemmas{
       }
     }
 
+    lemma SubArrayPreservesChanges(p: Program, i: int, res: seq<int>, temp: seq<int>)
+    requires 0 <= i < |p.commands|
+    requires |res| > 0
+    requires res[0]==i
+    requires temp == ChangesHelper(p, i+1)
+    requires change_helper_correct(p, i+1, temp)
+    requires temp == res[1..]
+    requires (forall d:: (d in temp && p.commands[d] in ['+', '-', '<', '>']) ==> ((d+count_consecutive_symbols(p, d) == |p.commands|) || d+count_consecutive_symbols(p, d) in temp))
+    requires !(p.commands[i] in ['+', '-', '>', '<'])
+    ensures forall d:: d in res ==> (p.commands[d] in ['+', '-', '<', '>'] ==> ((d+count_consecutive_symbols(p, d) == |p.commands|) || d+count_consecutive_symbols(p, d) in res))
+    {
+      forall d | d in res
+      ensures p.commands[d] in ['+', '-', '<', '>'] ==> ((d+count_consecutive_symbols(p, d) == |p.commands|) || d+count_consecutive_symbols(p, d) in res)
+      {
+        if d in res[1..] && p.commands[d] in ['+', '-', '<', '>']{
+          // assume false;
+          assert d in temp;
+          assert ((d+count_consecutive_symbols(p, d) == |p.commands|) || d+count_consecutive_symbols(p, d) in temp);
+          assert ((d+count_consecutive_symbols(p, d) == |p.commands|) || d+count_consecutive_symbols(p, d) in res[1..]);
+          assert ((d+count_consecutive_symbols(p, d) == |p.commands|) || d+count_consecutive_symbols(p, d) in res);
+        }else if d in res[1..]{
+          assert !(p.commands[d] in ['+', '-', '<', '>']);
+        }else{
+          assert d == res[0];
+          assert res[0] == i;
+          assert !(p.commands[i] in ['+', '-', '<', '>']);
+          assert !(p.commands[d] in ['+', '-', '<', '>']);          
+          // assume false;
+        }
+      }
+    }
+
     lemma ChangeHelperRecursive(p: Program, i: int, res: seq<int>, temp: seq<int>)
     requires 0 <= i < |p.commands|
     requires |res| > 0
@@ -123,18 +155,26 @@ module Lemmas{
 
       assert (forall d:: (d in temp && p.commands[d] in ['+', '-', '<', '>']) ==> ((d+count_consecutive_symbols(p, d) == |p.commands|) || d+count_consecutive_symbols(p, d) in temp));
       // TODO: fix from here, i think the else case is probably wrong? and maybe put the if case in a lemma :)
-      forall d | d in res
-      ensures p.commands[d] in ['+', '-', '<', '>'] ==> ((d+count_consecutive_symbols(p, d) == |p.commands|) || d+count_consecutive_symbols(p, d) in res)
-      {
-        if d in res[1..]{
-          assert d in temp;
-          assert p.commands[d] in ['+', '-', '<', '>'] ==> ((d+count_consecutive_symbols(p, d) == |p.commands|) || d+count_consecutive_symbols(p, d) in temp);
-          assert p.commands[d] in ['+', '-', '<', '>'] ==> ((d+count_consecutive_symbols(p, d) == |p.commands|) || d+count_consecutive_symbols(p, d) in res[1..]);
-          assert p.commands[d] in ['+', '-', '<', '>'] ==> ((d+count_consecutive_symbols(p, d) == |p.commands|) || d+count_consecutive_symbols(p, d) in res);
-        }else{
-          assert !(p.commands[d] in ['+', '-', '<', '>']);
-        }
-      }
+      SubArrayPreservesChanges(p, i, res, temp);
+      // forall d | d in res
+      // ensures p.commands[d] in ['+', '-', '<', '>'] ==> ((d+count_consecutive_symbols(p, d) == |p.commands|) || d+count_consecutive_symbols(p, d) in res)
+      // {
+      //   if d in res[1..] && p.commands[d] in ['+', '-', '<', '>']{
+      //     assume false;
+      //     assert d in temp;
+      //     assert ((d+count_consecutive_symbols(p, d) == |p.commands|) || d+count_consecutive_symbols(p, d) in temp);
+      //     assert ((d+count_consecutive_symbols(p, d) == |p.commands|) || d+count_consecutive_symbols(p, d) in res[1..]);
+      //     assert ((d+count_consecutive_symbols(p, d) == |p.commands|) || d+count_consecutive_symbols(p, d) in res);
+      //   }else if d in res[1..]{
+      //     assert !(p.commands[d] in ['+', '-', '<', '>']);
+      //   }else{
+      //     assert d == res[0];
+      //     assert res[0] == i;
+      //     assert !(p.commands[i] in ['+', '-', '<', '>']);
+      //     assert !(p.commands[d] in ['+', '-', '<', '>']);          
+      //     // assume false;
+      //   }
+      // }
 
       assert (forall d:: (d in res && p.commands[d] in ['+', '-', '<', '>']) ==> ((d+count_consecutive_symbols(p, d) == |p.commands|) || d+count_consecutive_symbols(p, d) in res));
 
@@ -702,18 +742,9 @@ module Lemmas{
         match ir.commands[i] 
           case Inc(k) =>{
             AlignmentMeansEquivalenceIncs(p, s, ir, i);
-                        
-            
-            // assert forall j:: index <= j < index+k ==> p.commands[j] == p.commands[index];
-            // assert p_by_k.commands==p.commands;
-            // assert count_consecutive_symbols(p, index)==count_consecutive_symbols(p_by_k, index);
-           
-            // assert forall j:: 0<=j<k ==> (index+j < |p.commands|) && p.commands[index+j] == p.commands[index];
-
           } 
           case Move(k) =>{
-            AlignmentMeansEquivalenceMoves(p, s, ir, i);
-          
+            AlignmentMeansEquivalenceMoves(p, s, ir, i);          
           }
           case Print =>{
             var p_by_k := Program(p.commands, index, p.input);
@@ -734,15 +765,11 @@ module Lemmas{
             assert max_steps(p_by_k,s, p', s');
             IrStep(currIr, s);  
             var ir': IntermediateRep, sIR :|valid_state(s, sIR) && state_reqs(sIR) && in_sync_irs(currIr, ir') && valid_ir(ir') && ir_step(currIr, s, ir', sIR) && valid_input(ir'.input);
-            // assert sIR.memory == s.memory;
             assert sIR == s';          
           }
           case Jump(dest, dir)=>{
             AlignmentMeansEquivalenceLoops(p, s, ir, i);
           }
-          
-          // assert exists p': Program, s': State, ir': IntermediateRep, sIR: State:: valid_program(p') && aligned_programs(p, p') && valid_state(s, s') && state_reqs(s')  && program_k_max_steps(p, s, p', s', i) && state_reqs(sIR) && valid_state(s, sIR) && valid_ir(ir') && valid_input(ir'.input) && ir_step(IntermediateRep(ir.commands, i, ir.input), s, ir', sIR) && s'==sIR ;
-
       }
 
       assert EquivalentReps(p, s, ir);
