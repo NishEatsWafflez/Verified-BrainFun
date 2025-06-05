@@ -24,13 +24,19 @@ module Common{
     {
     |p.commands| > 0 
         && 0<= p.pointer <= |p.commands|
-        && (forall i:: (0<= i < |p.commands| ==> p.commands[i] in [',', /*'[', ']',*/ '.', '+', '-', '>', '<']))
-        && balanced_brackets(p)
+        && (forall i:: (0<= i < |p.commands| ==> p.commands[i] in [',', '[', ']', '.', '+', '-', '>', '<']))
+        && valid_loop(p.commands)
+
     }
 
     predicate valid_ir(ir: IntermediateRep)
     {
-        0 <= ir.pointer <= |ir.commands|
+        0 <= ir.pointer <= |ir.commands| &&
+        forall k:: 0<= k < |ir.commands| ==>
+            (match ir.commands[k] {
+                case Jump(dest, dir) => 0<= dest < |ir.commands|
+                case _ => true
+            })
     }
 
     predicate state_reqs(s: State){
@@ -43,11 +49,22 @@ module Common{
     predicate within_program_range(i: int, p: Program, p': Program){
         p.pointer <= i < p'.pointer
     }
+    predicate empty_body(p: seq<char>)
+    {
+        (forall i:: (0<=i < |p| ==> p[i] != '[' && p[i] != ']')) 
+    }
 
     predicate valid_loop(p: seq<char>)
 
     {
-        (forall i:: (0<=i < |p| ==> p[i] != '[' && p[i] != ']')) || (exists j, k:: 0<=j < k < |p| && p[j]=='[' && p[k]==']' && valid_loop(p[j+1..k]))
+        empty_body(p) || 
+        (
+            forall i:: (0<= i < |p| ==>(
+                (p[i]== '[' ==> exists k::  i< k < |p| && p[k]== ']' && valid_loop(p[i+1..k]))
+                &&
+                (p[i]== ']' ==> exists k::  0<= k < i && p[k]== '[' && valid_loop(p[k+1..i]))
+            ))
+        )
     }
 
     predicate balanced_counter(p: seq<char>, counter: int)
@@ -70,7 +87,7 @@ module Common{
 
     predicate ir_moved_up(ir: IntermediateRep, ir': IntermediateRep)
     {
-        ((ir.pointer == |ir.commands|-1 ==ir'.pointer) || (ir'.pointer == ir.pointer + 1)) 
+        (ir'.pointer == ir.pointer + 1) && (ir.commands == ir'.commands)
 
     }
     predicate valid_state(s: State, s': State){
@@ -89,23 +106,8 @@ module Common{
         forall i:: 0 <= i < |input| ==> 0 <= input[i] as int<= 255
     }
 
-
-    // predicate enough_input(p: Program)
-    // requires valid_program(p){
-    //     |p.input| == |(set i | p.pointer <=i < |p.commands| && p.commands[i] == ',')|
-    // }
-    ghost predicate matching_pred(s: seq<char>, indices: seq<int>)
-    requires forall i:: 0<= i <= |indices|-1 ==> 0 <= indices[i] < |s|
-    {
-        (|indices| == 0) || (|indices|>0==>
-        // true //TODO: write lol
-        (forall i:: (0<= i < |indices|-1 ==> forall j:: indices[i] <= j < indices[i+1] ==> (s[j] == s[indices[i]] && s[j] != s[indices[i+1]]))) 
-        // &&(forall j:: indices[|indices|-1] <= j < |s| ==> s[j] == s[indices[|indices|-1]])
-    )}
-
     function Changes(p: Program): seq<int>
-
-    // ensures matching_pred(s, Changes(s))
+    ensures increasing_seq(Changes(p))
     {
         if |p.commands|==0 then []
         else if 0< |p.commands| <= 1 then [0]
@@ -113,6 +115,7 @@ module Common{
     }
     function  ChangesHelper(p: Program, i: int): seq<int>
         requires 0 <= i <= |p.commands|
+        ensures increasing_seq(ChangesHelper(p, i))
         decreases |p.commands|-i 
     {
         if i == |p.commands| then []
@@ -135,8 +138,8 @@ module Common{
         &&
         (forall d:: (d in res && p.commands[d] in ['+', '-', '<', '>']) ==> ((d+count_consecutive_symbols(p, d) == |p.commands|) || d+count_consecutive_symbols(p, d) in res))
         &&
-        (forall d:: (d in res && !(p.commands[d] in ['+', '-', '<', '>'])) ==> ((d+1 == |p.commands| && !(d+1 in res)) || (d+1 < |p.commands| && d+1 in res))
-))
+        (forall d:: (d in res && !(p.commands[d] in ['+', '-', '<', '>'])) ==> ((d+1 == |p.commands| && !(d+1 in res)) || (d+1 < |p.commands| && d+1 in res)))
+)
         )
     }
  
@@ -179,7 +182,7 @@ module Common{
     {}
 
     lemma simple_exclusion_2(symb: char)
-        requires symb == ',' 
+        requires symb == ',' || symb == '['
         ensures !(symb in ['+', '-', '>', '<'])
     {}
 
@@ -230,6 +233,10 @@ module Common{
     predicate inside_the_indices(p: Program, next_command_indices: seq<int>, i: int){
        (i == |p.commands|) || (i < |p.commands| && i in next_command_indices)
     }
+    lemma inside_the_indices_sum(p: Program, next_command_indices: seq<int>, i: int, k: int)
+    requires i in next_command_indices && inside_the_indices(p, next_command_indices, i+k)
+    ensures next_step(p, i, k, next_command_indices)
+    {}
 
     ghost predicate sub_changes_inclusion(p: Program, next_command_indices: seq<int>)
     requires forall d:: 0<= d < |next_command_indices| ==> 0<=next_command_indices[d]<|p.commands|
@@ -243,29 +250,61 @@ module Common{
         forall d:: (d in next_command_indices && !(p.commands[d] in ['+', '-', '<', '>'])) ==> next_step(p, d, 1, next_command_indices)
 
     }
+    predicate within_length(d: int, s1: seq<int>)
+    {
+        0<= d < |s1|
+    }
+
+    predicate just_short_length(d: int, s1: seq<int>)
+    {
+        0<=d<|s1|-1
+    }
+
     ghost predicate changes_correct(p: Program, res: seq<int>)
     {
-        (forall d:: 0<= d < |res| ==>
+        (forall d:: within_length(d, res) ==>
             (0 <= res[d] < |p.commands| &&
-            ( 0 <= d < |res|-1 && p.commands[res[d]] in ['+', '-', '>', '<'] ==>(
+            ( just_short_length(d, res) && p.commands[res[d]] in ['+', '-', '>', '<'] ==>(
                 res[d+1] == res[d] + count_consecutive_symbols(p, res[d])
                 && res[d+1] != res[d]
             )) &&
             (((p.commands[res[d]] in ['+', '-', '>', '<'])) ==>
                 (res[d]+count_consecutive_symbols(p, res[d]) == |p.commands| || (res[d]+count_consecutive_symbols(p, res[d]) < |p.commands| &&res[d]+count_consecutive_symbols(p, res[d]) in res)))    
             &&
-            ((0 <= d < |res| && !(p.commands[res[d]] in ['+', '-', '>', '<'])) ==>
-                (res[d]+1 == |p.commands| || (res[d]+1 < |p.commands| && res[d]+1 in res)))    
+            ((within_length(d, res) && !(p.commands[res[d]] in ['+', '-', '>', '<'])) ==>
+                ((res[d]+1 == |p.commands| ) || (res[d]+1 < |p.commands| && res[d]+1 in res)))    
             )
             &&
-            ( 0 <= d < |res|-1 && !(p.commands[res[d]] in ['+', '-', '>', '<']) ==>(
+            ( just_short_length(d, res) && !(p.commands[res[d]] in ['+', '-', '>', '<']) ==>(
                 res[d+1] == res[d] + 1
             ))
+            // &&
+            // (d == |res|-1 && !(p.commands[res[d]] in ['+', '-', '>', '<']) ==>
+            //     res[d]+1 == |p.commands|
+            // )
         )
+    }
+    predicate increasing_seq (s: seq<int>)
+    {
+        forall i :: 1 <= i < |s| ==> s[i - 1] < s[i] 
     }
     lemma zero_implies_all (j: int, s1: seq<int>, s2: seq<int>)
     requires j==0
     ensures 1<=j<=|s2| ==> s1[j-1]==s2[j-1]
+    {}
+
+    ghost predicate in_bounds_commands(p: Program, res: seq<int>){
+        forall d:: within_length(d, res) ==>
+            (0 <= res[d] < |p.commands|)
+    }
+    lemma interpret_changes_correct(p: Program, res: seq<int>)
+    requires changes_correct(p, res)
+    ensures in_bounds_commands(p, res)
+    {}
+
+    lemma in_bounds_commands_implies_not_in(p: Program, res: seq<int>, i: int)
+    requires in_bounds_commands(p, res)
+    ensures i >= |p.commands| ==> !(i in res)
     {}
 
     lemma extension (j: int, s1: seq<int>, s2: seq<int>)
@@ -282,6 +321,12 @@ module Common{
     requires k == j+1
     ensures 1<= k <= |s2| ==> s2[k-1] == s2[k-1]
     {}
+
+    lemma greater_not_equal(s1: seq<int>, i: int)
+    requires forall k:: k in s1 ==> i>k
+    ensures !(i in s1)
+    {}
+
 
     lemma addition_preserving_3 (s1: seq<int>, s2: seq<int>, j: int, k: int)
     requires 0<= j < |s1|
@@ -304,7 +349,8 @@ module Common{
     function count_consecutive_symbols(p: Program, idx: int): nat
         requires 0 <= idx < |p.commands|
         ensures idx + count_consecutive_symbols(p, idx) <= |p.commands|
-        ensures idx+count_consecutive_symbols(p, idx) < |p.commands| && (p.commands[idx] in ['+', '-', '<', '>'])==> (p.commands[idx] != p.commands[idx+count_consecutive_symbols(p, idx)])
+        ensures idx+count_consecutive_symbols(p, idx) < |p.commands| && (p.commands[idx] in ['+', '-', '<', '>'])
+        ==> (p.commands[idx] != p.commands[idx+count_consecutive_symbols(p, idx)])
         ensures forall j:: idx <= j < idx+count_consecutive_symbols(p, idx) ==> p.commands[j]==p.commands[idx]
         decreases |p.commands|-idx
         {

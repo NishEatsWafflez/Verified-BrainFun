@@ -9,13 +9,15 @@ module Steps{
     requires state_reqs(s)
     {
         0 <= p.pointer < |p.commands| && 0 <= p'.pointer <= |p'.commands| && p.commands == p'.commands && 
-        p.commands != [] ==> //TODO: how to get user input
+        p.commands != [] ==> 
         match p.commands[p.pointer]
             case '+' => 
-                0 <= s.pointer < |s.memory| && s.pointer == s'.pointer && |s.memory| == |s'.memory| 
-                && (forall i :: 0 <= i < |s.memory| && i != s.pointer ==> (s.memory[i] == s'.memory[i]))
-                && ((s.memory[s.pointer] == 255) ==> s'.memory[s.pointer] == 0)
-                && (s.memory[s.pointer] != 255 ==> s'.memory[s.pointer] == s.memory[s.pointer]+1) && pointer_moved_up(p, p')
+                s.pointer == s'.pointer&&
+                |s.memory| == |s'.memory| && s'.output == s.output&&
+                pointer_moved_up(p, p') &&
+                (s'.memory[s.pointer] == (s.memory[s.pointer]+ 1)%256)
+                && (forall i:: (0 <= i < |s.memory|  && i != s.pointer) ==> s.memory[i] == s'.memory[i])
+
             case '-' => 
                 0 <= s.pointer < |s.memory| && s.pointer == s'.pointer && |s.memory| == |s'.memory| 
                 && (forall i :: 0 <= i < |s.memory| && i != s.pointer ==> (s.memory[i] == s'.memory[i]))
@@ -30,7 +32,7 @@ module Steps{
                 && ((s.pointer - 1 < 0) ==> s'.pointer == 0)
                 && ((0 <= s.pointer - 1 < |s.memory|) ==> s'.pointer == s.pointer-1) && pointer_moved_up(p, p')
             case '[' => 
-                (0 <= s.pointer < |s.memory| && 0 <= s'.pointer < |s.memory| )
+                s == s' && p.commands == p'.commands
                 && ((s.memory[s.pointer] > 0) ==> pointer_moved_up(p,p'))
                 && (s.memory[s.pointer]== 0 ==> (p'.pointer > p.pointer && p'.commands[p'.pointer-1]== ']' && valid_loop(p.commands[p.pointer+1.. p'.pointer-1])))    //Need to add forall to make sure that at the soonest ]
             case '.' =>
@@ -40,12 +42,10 @@ module Steps{
                 && s'.output == s.output + [s.memory[s.pointer] as char]
             case ']' => 
                 (
-                    (0 <= s.pointer < |s.memory| && 0 <= s'.pointer < |s.memory| )
+                    s == s' && p.commands == p'.commands
                     && ((s.memory[s.pointer] == 0) ==> pointer_moved_up(p, p'))
-                    && (s.memory[s.pointer] > 0 ==> (0 < p'.pointer < p.pointer && p'.commands[p'.pointer-1]== '[' && valid_loop(p.commands[p'.pointer.. p.pointer-1])))
+                    && (s.memory[s.pointer] > 0 ==> (0 < p'.pointer <=p.pointer && p'.commands[p'.pointer-1]== '[' && valid_loop(p.commands[p'.pointer.. p.pointer])))
                 )
-                
-                // true
             case ',' =>
                 (
                     0 <= s.pointer < |s.memory| && s.pointer == s'.pointer && |s.memory| == |s'.memory| 
@@ -72,7 +72,6 @@ module Steps{
             case Inc(n) => 
                 0 <= s.pointer < |s.memory| && s.pointer == s'.pointer && |s.memory| == |s'.memory|  && s.output == s'.output
                 && (forall i :: 0 <= i < |s.memory| && i != s.pointer ==> (s.memory[i] == s'.memory[i]))
-                // && ((s.memory[s.pointer]+n >= 255) ==> s'.memory[s.pointer] == s.memory[s.pointer]+n%255)
                 && s'.memory[s.pointer] == (s.memory[s.pointer]+n)%256 && ir_moved_up(ir, ir')
             case Move(n) => 
                 0 <= s.pointer < |s.memory| && s.memory == s'.memory && 0 <= s'.pointer < |s.memory| 
@@ -80,9 +79,20 @@ module Steps{
                 && ((s.pointer + n <= 0) ==> s'.pointer == 0) && s.output == s'.output
                 && ((0 <= s.pointer + n < |s.memory|) ==> s'.pointer == s.pointer+n) 
             case Jump(dest, direction) =>
-                (ir_moved_up(ir, ir') && ir.commands == ir'.commands && ir.input == ir'.input && s == s') 
-                //Because we want to compare the commands directly, if we are in an equivalent state at the start of the loop and the body is the same
-                // we have an equivalent representation, we can thus just keep progressing normally
+                s == s' && ir.input == ir'.input && ir.commands == ir'.commands &&
+                ((direction && (
+                    (s.memory[s.pointer] > 0 && ir'.pointer == ir.pointer+1)
+                    ||
+                    (s.memory[s.pointer]==0 && ir'.pointer == dest+1)
+
+                )) ||
+                (!direction && (
+                    (s.memory[s.pointer] > 0 && ir'.pointer == dest+1)
+                    ||
+                    (s.memory[s.pointer]==0 && ir'.pointer == ir.pointer+1)
+                ))
+                )
+                // (ir_moved_up(ir, ir') && ir.commands == ir'.commands && ir.input == ir'.input && s == s') 
             case Print =>
                 s.memory == s'.memory && s.pointer == s'.pointer && s'.output == s.output + [s.memory[s.pointer]as char] //Add more for printing?
                 && ir_moved_up(ir, ir')
@@ -142,15 +152,11 @@ module Steps{
             case ',' | '.' =>
                 program_step(s, p, s', p')
             case '[' =>
-            (s==s' )
-                && pointer_moved_up(p,p')
-                // && (s.memory[s.pointer]== 0 ==> (p'.pointer > p.pointer && p'.commands[p'.pointer-1]== ']' && valid_loop(p.commands[p.pointer+1.. p'.pointer-1])))    //Need to add forall to make sure that at the soonest ]
+                (s == s' && p.commands == p'.commands
+                && ((s.memory[s.pointer] > 0) ==> pointer_moved_up(p,p'))
+                && (s.memory[s.pointer]== 0 ==> (p'.pointer > p.pointer && p'.commands[p'.pointer-1]== ']' && valid_loop(p.commands[p.pointer+1.. p'.pointer-1]))))    //Need to add forall to make sure that at the soonest ]
             case ']' =>
-                (
-                    (s==s')
-                    && (pointer_moved_up(p, p'))
-                    // && (s.memory[s.pointer] > 0 ==> (0 < p'.pointer < p.pointer && p'.commands[p'.pointer-1]== '[' && valid_loop(p.commands[p'.pointer.. p.pointer-1])))
-                )
+                program_step(s, p, s', p')
         )
     }
 
