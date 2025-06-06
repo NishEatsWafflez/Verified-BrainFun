@@ -1274,6 +1274,8 @@ ensures i in next_command_indices ==> next_step(p, i, k, next_command_indices)
 
 }
 
+
+
 lemma IncreasingArrayDoesntAffectMatching(p: Program, ir: seq<Instr>, bound: int, changes: seq<int>)
 requires |ir| == bound+1
 requires valid_program(p)

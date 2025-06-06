@@ -43,6 +43,7 @@ ensures EquivalentReps(p, InitialState(), result)
 method AddElementToStack(loop: seq<int>, commands: seq<Instr>) returns (result: seq<int>)
 requires loop_less_than_commands(loop, commands)
 requires |commands| > 0
+requires commands[|commands|-1] == Jump(0, true)
 ensures loop_less_than_commands(result, commands)
 
 {
@@ -54,20 +55,26 @@ ensures loop_less_than_commands(result, commands)
 
 
 //TODO: make sure that all of these hold before calling from main function, especially need to fix the commands[index] one :)
-method ReplaceElementInInstr(p: Program, commands: seq<Instr>, index: int, indices: seq<int>, j: int) returns (result: seq<Instr>)
-requires 0 <= index < |commands|
+method ReplaceElementInInstr(p: Program, commands: seq<Instr>, indices: seq<int>, j: int, loop_stack: seq<int>) returns (result: seq<Instr>)
 requires valid_program(p)
 requires indices == Changes(p)
 requires changes_correct(p, indices)
-requires 0 <= j <= |indices|
-requires 0 <= j <= |commands|
-requires commands[index] == Jump(0, true)
-requires matched_forall_loop(p, commands, indices, j)
+requires 0 <= j+1 <= |indices|
+requires 0 <= j+1 <= |commands|
+requires |loop_stack| > 0
+requires matched_forall_loop(p, commands, indices, j+1)
+requires loop_less_than_commands(loop_stack, commands)
 ensures |result| == |commands|
-ensures matched_forall_loop(p, result, indices, j)
+ensures matched_forall_loop(p, result, indices, j+1)
+ensures loop_less_than_commands(loop_stack, result)
+
 {
+  var index := loop_stack[|loop_stack|-1];
+  assert index in loop_stack;
+  assert 0 <= index < |commands|;
   result := commands[..index] + [Jump(|commands|-1, true)] + commands[index+1..];
-  ReplacingJumpWithJump(p, commands, result, index, indices, j);
+  ReplacingJumpWithJump(p, commands, result, index, indices, j+1);
+  //TODO: replace end index with index!!! yippee yahoo im having so much dafny fun!!!
 }
 
 
@@ -392,8 +399,12 @@ method Compile(p: Program)  returns (result: IntermediateRep)
         assert |commands| >= 0;
         if p.commands[next_command_indices[j]] == '['{
 
+          assert j == |commands|;
           assert p.commands[next_command_indices[j]] == '[';
           commands := commands+ [Jump(0, true)];
+          assert commands[|commands|-1] == Jump(0, true);
+          assert j == |commands|-1;
+          assert commands[j] == Jump(0, true);
           assert |commands| >0;
 
           assert matched_forall_loop(p, commands[..j], next_command_indices, j);
@@ -408,37 +419,51 @@ method Compile(p: Program)  returns (result: IntermediateRep)
           i := temp;
           assert i-old_i == k;
           single_step_within_range(p, old_i, k, next_command_indices);
+          assert commands[|commands|-1] == Jump(0, true);
 
           assert (old_i in next_command_indices) ==> inside_the_indices(p, next_command_indices, i);
           assert p.commands[next_command_indices[j]] == '[';
           simple_exclusion_2(p.commands[next_command_indices[j]]);
           assert !(p.commands[next_command_indices[j]] in ['+', '-', '<', '>']);
-          assert commands[j] == Jump(0, true);
+          // assume false;
+          // assert commands[j] == Jump(0, true);
+
           AndIsImplicationJumpFor(p, commands, j, next_command_indices, 0);
           // assert |commands| >0;
+          // assert j == |commands|-1;
+          assert commands[|commands|-1] == Jump(0, true);
+
+          // assume loop_less_than_commands(loop_start_stack, commands);
+          // assume |commands| > 0;
+          // assume commands[|commands|-1] == Jump(0, true);
+
+          // assume commands[|commands|-1] == Jump(0, true);
           assert loop_less_than_commands(loop_start_stack, commands);
           loop_start_stack := AddElementToStack(loop_start_stack, commands);
           // assert loop_less_than_commands(loop_start_stack[..|loop_start_stack|-1], commands);
           // SubArrayLoopSubArray(loop_start_stack, commands);
           assert loop_less_than_commands(loop_start_stack, commands);
         } else{
-          
           assert p.commands[next_command_indices[j]] == ']';
           commands := commands+ [Jump(0, false)];
           assert |commands| >0;
+
+          // assert loop_less_than_commands(loop_start_stack, commands[..j]);
+          // IncreasingArrayDoesntAffectLoops(commands, loop_start_stack, j);
+          assert loop_less_than_commands(loop_start_stack, commands);
 
           assert matched_forall_loop(p, commands[..j], next_command_indices, j);
           IncreasingArrayDoesntAffectMatching(p, commands, j, next_command_indices);
           assert matched_forall_loop(p, commands, next_command_indices, j);
           assert (old_i in next_command_indices) ==> inside_the_indices(p, next_command_indices, i+k);
           assert relation_between_old_new(p, old_i, i+k, next_command_indices);
-
           var temp := i+k;      
           addition_is_preserving(p, old_i, i, k, temp, next_command_indices);
           assert relation_between_old_new(p, old_i, temp, next_command_indices);
           i := temp;
           assert i-old_i == k;
           single_step_within_range(p, old_i, k, next_command_indices);
+          assert loop_less_than_commands(loop_start_stack, commands);
 
           assert (old_i in next_command_indices) ==> inside_the_indices(p, next_command_indices, i);
           assert p.commands[next_command_indices[j]] == ']';
@@ -446,25 +471,55 @@ method Compile(p: Program)  returns (result: IntermediateRep)
           assert !(p.commands[next_command_indices[j]] in ['+', '-', '<', '>']);
           assert commands[j] == Jump(0, false);
           AndIsImplicationJumpBack(p, commands, j, next_command_indices, 0);
+          assert loop_less_than_commands(loop_start_stack, commands);
+          assert matched_forall_loop(p, commands, next_command_indices, j+1);
+
           if |loop_start_stack| > 0{
             assert loop_less_than_commands(loop_start_stack, commands);
-            var start_index := loop_start_stack[|loop_start_stack| - 1];        
-            assert start_index in loop_start_stack;
-            assert 0 <= start_index < |commands|;
-            loop_start_stack := loop_start_stack[0 .. |loop_start_stack| - 1];
-            assert |commands[0..start_index]| == start_index;  
-            var new_commands := ReplaceElementInInstr(p, commands, start_index, next_command_indices, j+1);
-            // var new_commands := commands[0 .. start_index] + [Jump(|commands|-1, true)] + commands[start_index+1..];
-            // ReplacingJumpProperties(commands, new_commands, start_index, commands);
-            // assert |new_commands| == |commands|;
-            assume false;
-            ReplacingJumpWithJump(p, commands, new_commands, start_index, next_command_indices, j+1);
+            assert |loop_start_stack| > 0;
+            // var start_index := loop_start_stack[|loop_start_stack| - 1];        
+            // assert start_index in loop_start_stack;
+            // // assume false;
+            // assert 0 <= start_index < |commands|;
+            // // loop_start_stack := loop_start_stack[0 .. |loop_start_stack| - 1];
+
+            // assert |commands[0..start_index]| == start_index; 
+
+            // assert (match commands[start_index]
+            //   case Jump(_, true) => true
+            //   case _ => false);
+            // // assert commands[start_index] == Jump(0, true);
+            // assume commands[start_index] == Jump(0, true);
+            assert valid_program(p);
+            assert next_command_indices == Changes(p);
+            assert changes_correct(p, next_command_indices);
+            assert 0 <= j+1 <= |next_command_indices|;
+            assert 0 <= j+1 <= |commands|;
+            assert matched_forall_loop(p, commands, next_command_indices, j+1);
+            assert loop_less_than_commands(loop_start_stack, commands);
+            // assume false;
+            var new_commands := ReplaceElementInInstr(p, commands, next_command_indices, j, loop_start_stack);
+            // assert matched_forall_loop(p, new_commands, next_command_indices, j+1);
+            // assert loop_less_than_commands(loop_start_stack, new_commands);
+
+            // assume false;
+            commands := new_commands;
+            // assert matched_forall_loop(p, commands, next_command_indices, j+1);
+            assert in_bounds_commands(p, next_command_indices);
+            assert loop_less_than_commands(loop_start_stack, commands);
+            // assume false;
+
+            // // var new_commands := commands[0 .. start_index] + [Jump(|commands|-1, true)] + commands[start_index+1..];
+            // // ReplacingJumpProperties(commands, new_commands, start_index, commands);
+            // // assert |new_commands| == |commands|;
+            // assume false;
+            // ReplacingJumpWithJump(p, commands, new_commands, start_index, next_command_indices, j+1);
           }
 
 
         }
 
-        assert matched_command_with_ir(p, commands, j, next_command_indices);
+        // assert matched_command_with_ir(p, commands, j, next_command_indices);
         assert matched_forall_loop(p, commands, next_command_indices, j+1);
         assert in_bounds_commands(p, next_command_indices);
         assert loop_less_than_commands(loop_start_stack, commands);

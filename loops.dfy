@@ -47,74 +47,6 @@ else
         case Jump(k, false) => balance > 0 && valid_loop_ir_helper(ir, balance - 1, i+1)
         case _ => valid_loop_ir_helper(ir, balance, i+1)
 }
-// predicate valid_loop_program(p: seq<char>)
-
-// {
-//     empty_body(p) || 
-//     (
-//         forall i:: (0<= i < |p| ==>(
-//             (p[i]== '[' ==> exists k::  i< k < |p| && p[k]== ']' && valid_loop_program(p[i+1..k]))
-//             &&
-//             (p[i]== ']' ==> exists k::  0<= k < i && p[k]== '[' && valid_loop_program(p[k+1..i]))
-//         ))
-//     )
-// }
-// predicate loop_pred(p: seq<char>, i: int)
-// requires 0 <= i < |p|
-// {
-//     (p[i]== '[' ==> exists k::  i< k < |p| && p[k]== ']' && valid_loop_program(p[i+1..k]))
-//         &&
-//     (p[i]== ']' ==> exists k::  0<= k < i && p[k]== '[' && valid_loop_program(p[k+1..i]))
-// }
-
-// predicate loop_pred_ir(ir: seq<Instr>, i: int)
-// requires 0<= i < |ir|
-// {
-//     (match ir[i]
-//         case Jump(j, true) =>
-//             (exists k:: i< k < |ir| && (
-//                 match ir[k]
-//                     case Jump(_, false) => true
-//                     case _ => false
-//             ) && valid_loop_ir(ir[i+1..k]))
-//         case Jump(j, false) => (
-//             exists k:: 0 <= k < i && (
-//                 match ir[k] 
-//                     case Jump(_, true) => true
-//                     case _ => false
-//             ) && valid_loop_ir(ir[k+1..i])
-//         )
-//         case _ => true
-        
-//     )
-// }
-
-// predicate valid_loop_ir(ir: seq<Instr>)
-
-// {
-//     |ir| == 0 || 
-//     (
-//         forall i:: (0<= i < |ir| ==>( loop_pred_ir(ir, i)
-//             // (match ir[i]
-//             //     case Jump(j, true) =>
-//             //         (exists k:: i< k < |ir| && (
-//             //             match ir[k]
-//             //                 case Jump(_, false) => true
-//             //                 case _ => false
-//             //         ) && valid_loop_ir(ir[i+1..k]))
-//             //     case Jump(j, false) => (
-//             //         exists k:: 0 <= k < i && (
-//             //             match ir[k] 
-//             //                 case Jump(_, true) => true
-//             //                 case _ => false
-//             //         ) && valid_loop_ir(ir[k+1..i])
-//             //     )
-//             //     case _ => true
-                
-//             // )
-//         ))
-//     )
-// }
 
 lemma aligned_implies_valid(p: Program, ir: IntermediateRep)
 requires valid_loop_program(p)
@@ -369,8 +301,17 @@ ensures valid_loop_ir_helper(ir.commands, balance, index)
 
 predicate loop_less_than_commands(loops_indices: seq<int>, commands: seq<Instr>)
 {
-    forall i:: i in loops_indices ==> 0 <= i < |commands|
+    forall i:: i in loops_indices ==> 0 <= i < |commands| && (match commands[i]
+        case Jump(_, true) => true
+        case _ => false)
 }
+
+lemma IncreasingArrayDoesntAffectLoops(ir: seq<Instr>, loops: seq<int>, j: int)
+requires |ir| > 1
+requires 0<=j < |ir|
+requires loop_less_than_commands(loops, ir[..j])
+ensures loop_less_than_commands(loops, ir)
+{}
 
 lemma ValidLoopMoveRight (p: Program, ir: IntermediateRep, index: int, p_index: int, indices: seq<int>)
 requires valid_program(p)
