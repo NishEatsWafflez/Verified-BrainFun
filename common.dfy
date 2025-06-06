@@ -177,12 +177,12 @@ module Common{
         (old_i in next_command_indices) ==> inside_the_indices(p, next_command_indices, i)
     }
     lemma simple_exclusion(symb: char)
-    requires symb == '.' 
+    requires symb == '.' || symb == ']'
     ensures !(symb in ['+', '-', '>', '<'])
     {}
 
     lemma simple_exclusion_2(symb: char)
-        requires symb == ',' || symb == '['
+        requires symb == ',' || symb == '[' 
         ensures !(symb in ['+', '-', '>', '<'])
     {}
 

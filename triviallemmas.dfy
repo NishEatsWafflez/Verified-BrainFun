@@ -17,6 +17,8 @@ module Trivial{
         ensures p[i-1]==p[k]
     {}
 
+
+
     lemma AndIsImplicationMoveBackwards(p: Program, ir: seq<Instr>, index: int, changes: seq<int>, k: int)
         requires valid_program(p)
         requires changes == Changes(p)
@@ -46,6 +48,7 @@ module Trivial{
         ensures matched_command_with_ir(p, ir, index, changes)
         ensures matched_forall_loop(p, ir, changes, index+1)
     {}
+
 
     lemma AndIsImplicationJumpBack(p: Program, ir: seq<Instr>, index: int, changes: seq<int>, dest: int)
         requires valid_program(p)
@@ -179,11 +182,40 @@ module Trivial{
         ensures |s1| == |s2|
     {}
 
+    lemma CompileHelper(p: Program, commands: seq<Instr>, i: int, k: int, next_command_indices: seq<int>, j: int)
+    requires next_command_indices == Changes(p)
+    requires valid_program(p)
+    requires changes_correct(p, next_command_indices)
+    requires k == 1
+    requires j == |commands|
+    requires |commands| <= |next_command_indices|
+    requires 0 <= i < |p.commands|
+    requires p.commands[i] == '.' || p.commands[i] == ','
+    requires matched_forall_loop(p, commands, next_command_indices, j)
+    ensures (i in next_command_indices) ==> inside_the_indices(p, next_command_indices, i+k)
+    {
+        implication_with_and(p, i, k, next_command_indices); 
+        assert (i in next_command_indices && next_step(p, i, k, next_command_indices)) ==> inside_the_indices(p, next_command_indices, i+k);
+        single_step_within_range(p, i, k, next_command_indices);
+        step_is_indices(p, i, k, next_command_indices);
+        assert (i in next_command_indices) ==> inside_the_indices(p, next_command_indices, i+k);
+        assert matched_forall_loop(p, commands, next_command_indices, j);
+
+    }
+
     lemma single_step_within_range(p: Program, i: int, k: int, next_command_indices: seq<int>)
         requires k==1
         requires next_command_indices == Changes(p)
         requires 0<= i < |p.commands|
-        requires p.commands[i]==',' || p.commands[i] == '.' || p.commands[i] == '[' || p.commands[i] == ']'
+        requires p.commands[i]==',' || p.commands[i] == '.' || p.commands[i] == '[' || p.commands[i] == ']' 
+        requires changes_correct(p, next_command_indices)
+        ensures i in next_command_indices ==> next_step(p, i, k, next_command_indices)
+    {}
+    lemma single_step_within_range_close_loop(p: Program, i: int, k: int, next_command_indices: seq<int>)
+        requires k==1
+        requires next_command_indices == Changes(p)
+        requires 0<= i < |p.commands|
+        requires p.commands[i] == ']'
         requires changes_correct(p, next_command_indices)
         ensures i in next_command_indices ==> next_step(p, i, k, next_command_indices)
     {}

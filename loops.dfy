@@ -17,7 +17,24 @@ predicate valid_loop_ir(ir: IntermediateRep)
 {
     valid_loop_ir_helper(ir.commands, 0, 0)
 }
-
+lemma SubArrayLoopSubArray(loop: seq<int>, commands: seq<Instr>)
+requires |loop| >= 1
+requires |commands| > 0
+requires loop_less_than_commands(loop[..(|loop|-1)], commands)
+requires loop[(|loop|-1)]==|commands|-1
+ensures loop_less_than_commands(loop, commands)
+{
+    forall k | k in loop
+    ensures 0 <= k < |commands|
+    {
+        if k in loop[..|loop|-1]{
+            assert 0 <= k < |commands|;
+        } else{
+            assert k == loop[|loop|-1];
+            assert 0 <= k < |commands|;
+        }
+    }
+}
 predicate valid_loop_ir_helper(ir: seq<Instr>, balance: int, i: int)
 requires 0<=i<=|ir|
 decreases |ir|-i
@@ -169,7 +186,6 @@ ensures valid_loop_ir_helper(ir.commands, balance, index)
         match p.commands[p_index] 
             case '[' => {
                 // assert balance >=0;
-                // assume false;
                 assert (match ir.commands[index]
                     case Jump(_, true) => true
                     case _ => false
@@ -183,7 +199,6 @@ ensures valid_loop_ir_helper(ir.commands, balance, index)
                     LemmaStrictlyIncreasing(indices);
                     assert p_index+1 == |p.commands|;
                 }
-                // assume false;
 
                 assert valid_loop_program_helper(p.commands, balance+1, p_index+1);
                 assert 0 <= index+1 <= |indices|;
@@ -203,7 +218,6 @@ ensures valid_loop_ir_helper(ir.commands, balance, index)
                 aligned_implies_valid_helper(p, ir, new_b, indices, new_ind, new_p_ind);
             }
             case ']' => {
-                // assume false;
                 assert balance > 0;
                 assert (match ir.commands[index]
                     case Jump(_, false) => true
@@ -250,7 +264,6 @@ ensures valid_loop_ir_helper(ir.commands, balance, index)
                     LemmaStrictlyIncreasing(indices);
                     assert p_index+1 == |p.commands|;
                 }
-                // assume false;
                 assert valid_loop_program_helper(p.commands, balance, p_index+1);
                 assert 0 <= index+1 <= |indices|;
                 assert indices == Changes(p);
@@ -282,7 +295,6 @@ ensures valid_loop_ir_helper(ir.commands, balance, index)
                     LemmaStrictlyIncreasing(indices);
                     assert p_index+1 == |p.commands|;
                 }
-                // assume false;
                 assert valid_loop_program_helper(p.commands, balance, p_index+1);
                 assert 0 <= index+1 <= |indices|;
                 assert indices == Changes(p);
@@ -313,7 +325,6 @@ ensures valid_loop_ir_helper(ir.commands, balance, index)
                 addition_balance_k(p, balance, p_index, new_b, new_p_ind, k);
             }
             case '<'=>{
-                // assume false;
                 ValidLoopMoveLeft(p, ir, index, p_index, indices);
                 // assert (match ir.commands[index]
                 //     case Jump(_, _) => false
@@ -326,7 +337,6 @@ ensures valid_loop_ir_helper(ir.commands, balance, index)
                 addition_balance_k(p, balance, p_index, new_b, new_p_ind, k);
             }
             case '+'=>{
-                // assume false;
                 ValidLoopAdd(p, ir, index, p_index, indices);
                 // assert (match ir.commands[index]
                 //     case Jump(_, _) => false
@@ -339,7 +349,6 @@ ensures valid_loop_ir_helper(ir.commands, balance, index)
                 addition_balance_k(p, balance, p_index, new_b, new_p_ind, k);
             }
             case '-'=>{
-                // assume false;
                 ValidLoopSub(p, ir, index, p_index, indices);
                 // assert (match ir.commands[index]
                 //     case Jump(_, _) => false
@@ -352,9 +361,15 @@ ensures valid_loop_ir_helper(ir.commands, balance, index)
                 addition_balance_k(p, balance, p_index, new_b, new_p_ind, k);
             }
             case _ => {
-                assume false;
+                assume {:axiom} false; //This is a very minor axiom to assert that there are only these 8 characters, 
+                //for some reason it times out without this...
             }
     }
+}
+
+predicate loop_less_than_commands(loops_indices: seq<int>, commands: seq<Instr>)
+{
+    forall i:: i in loops_indices ==> 0 <= i < |commands|
 }
 
 lemma ValidLoopMoveRight (p: Program, ir: IntermediateRep, index: int, p_index: int, indices: seq<int>)

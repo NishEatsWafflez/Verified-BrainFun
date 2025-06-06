@@ -31,6 +31,39 @@ module Lemmas{
         }
 
       }
+    lemma ReplacingJumpProperties(ir1: seq<Instr>, ir2: seq<Instr>, i: int, commands: seq<Instr>)
+    requires 0<=i < |ir1|
+    requires ir1[i] == Jump(0, true)
+    requires ir2 == ir1[..i] + [Jump(|commands|-1, true)] + ir1[i+1..]
+    ensures |ir1| == |ir2|
+    ensures forall k:: 0<= k < |ir1| && k!=i ==> ir1[k]==ir2[k]
+    ensures match ir1[i]
+            case Jump(_, true) => true
+            case _ => false
+    ensures match ir2[i]
+          case Jump(_, true) => true
+          case _ => false
+    {}
+    
+
+    lemma ReplacingJumpWithJump(p: Program, ir1: seq<Instr>, ir2: seq<Instr>, i: int, next_command_indices: seq<int>, j: int)
+      requires |ir1| == |ir2|
+      requires 0 <= i < |ir1|
+      requires forall k:: 0<= k < |ir1| && k!=i ==> ir1[k]==ir2[k]
+      requires match ir1[i]
+              case Jump(_, true) => true
+              case _ => false
+      requires match ir2[i]
+            case Jump(_, true) => true
+            case _ => false
+      requires next_command_indices == Changes(p)
+      requires changes_correct(p, next_command_indices)
+      requires valid_program(p)
+      requires 0 <= j <= |next_command_indices|
+      requires 0 <= j <= |ir1|
+      requires matched_forall_loop(p, ir1, next_command_indices, j)
+      ensures matched_forall_loop(p, ir2, next_command_indices, j)
+      {}
 
     lemma ZeroAndRest(p: Program, i: int, res: seq<int>, temp: seq<int>)
     requires 0 <= i < |p.commands|
@@ -1225,7 +1258,7 @@ lemma bigger_step_within_range(p: Program, i: int, k: int, next_command_indices:
 requires 0<= i < |p.commands|
 requires k== count_consecutive_symbols(p, i)
 requires next_command_indices == Changes(p)
-requires p.commands[i]=='<' || p.commands[i] == '>'
+requires p.commands[i]=='<' || p.commands[i] == '>' || p.commands[i] == '+'
 requires changes_correct(p, next_command_indices)
 ensures i in next_command_indices ==> next_step(p, i, k, next_command_indices)
 {
