@@ -9,16 +9,7 @@ module Common{
         | Print
         | Jump(dest: int, direction: bool) //True is forwards, false is backwards (basically if this should be a backwards jump)
 
-    function InitialMemory(): seq<int>
-    {
-    [0, 0, 0, 0, 0] // TODO: fix to be larger
-    }
 
-    function InitialState(): State
-    // ensures StateValue(0, InitialMemory(), [])
-    {
-        StateValue(0, InitialMemory(), [])
-    }
 
     predicate valid_program(p: Program)
     {
@@ -32,9 +23,13 @@ module Common{
     predicate valid_ir(ir: IntermediateRep)
     {
         0 <= ir.pointer <= |ir.commands| &&
-        forall k:: 0<= k < |ir.commands| ==>
-            (match ir.commands[k] {
-                case Jump(dest, dir) => 0<= dest < |ir.commands|
+        valid_ir_commands(ir.commands)
+    }
+    predicate valid_ir_commands(ir: seq<Instr>)
+    {
+        forall k:: 0<= k < |ir| ==>
+            (match ir[k] {
+                case Jump(dest, dir) => 0<= dest < |ir|
                 case _ => true
             })
     }

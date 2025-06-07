@@ -17,24 +17,38 @@ predicate valid_loop_ir(ir: IntermediateRep)
 {
     valid_loop_ir_helper(ir.commands, 0, 0)
 }
-lemma SubArrayLoopSubArray(loop: seq<int>, commands: seq<Instr>)
-requires |loop| >= 1
-requires |commands| > 0
-requires loop_less_than_commands(loop[..(|loop|-1)], commands)
-requires loop[(|loop|-1)]==|commands|-1
-ensures loop_less_than_commands(loop, commands)
-{
-    forall k | k in loop
-    ensures 0 <= k < |commands|
-    {
-        if k in loop[..|loop|-1]{
-            assert 0 <= k < |commands|;
-        } else{
-            assert k == loop[|loop|-1];
-            assert 0 <= k < |commands|;
-        }
-    }
-}
+//TODO: fix this with updated definition of loop_less_than_commands :thumbsup:
+// lemma SubArrayLoopSubArray(loop: seq<int>, commands: seq<Instr>)
+// requires |loop| >= 1
+// requires |commands| > 0
+// requires loop_less_than_commands(loop[..(|loop|-1)], commands)
+// requires loop[(|loop|-1)]==|commands|-1
+// requires match commands[loop[|loop|-1]] 
+//     case Jump(_, true) => true
+//     case _ => false
+// ensures loop_less_than_commands(loop, commands)
+// {
+//     forall k | k in loop
+//     ensures 0 <= k < |commands|
+//     {
+//         if k in loop[..|loop|-1]{
+//             assert 0 <= k < |commands|;
+//             assert (match commands[k]
+//                 case Jump(_, true) => true
+//                 case _ => false
+//             );
+//         } else{
+//             assert k == loop[|loop|-1];
+//             assert 0 <= k < |commands|;
+//         }
+//     }
+// }
+lemma ShrinkingLoopStartStack(loops: seq<int>, commands: seq<Instr>)
+requires loop_less_than_commands(loops, commands)
+requires |loops| > 0
+ensures loop_less_than_commands(loops[..|loops|-1], commands)
+{}
+
 predicate valid_loop_ir_helper(ir: seq<Instr>, balance: int, i: int)
 requires 0<=i<=|ir|
 decreases |ir|-i
@@ -117,16 +131,13 @@ ensures valid_loop_ir_helper(ir.commands, balance, index)
     var p_index := indices[index];
         match p.commands[p_index] 
             case '[' => {
-                // assert balance >=0;
                 assert (match ir.commands[index]
                     case Jump(_, true) => true
                     case _ => false
                 );
-                // assert ((!(index+1 in indices)&&indices[index]+1 == |p.commands| ) || (indices[index]+1 < |p.commands| && indices[index]+1 in indices));    
                 if index+1 < |indices|{
                     assert index+1 < |indices|;
                     assert indices[index+1] == p_index+1;
-                    // assert indices[index+1]
                 }else{
                     LemmaStrictlyIncreasing(indices);
                     assert p_index+1 == |p.commands|;
@@ -179,77 +190,16 @@ ensures valid_loop_ir_helper(ir.commands, balance, index)
                 assert (new_p_ind == |p.commands|) || (new_ind < |indices| && new_p_ind == indices[new_ind]);
                 assert 0 <= new_ind <= |indices|;
                 aligned_implies_valid_helper(p, ir, new_b, indices, new_ind, new_p_ind);
-
-                // aligned_implies_valid_helper(p, ir, balance-1, indices, index+1, p_index+1);
             }
-            case ',' => {
-                assert (match ir.commands[index]
-                    case Jump(_, _) => false
-                    case UserInput => true
-                    case _ => false
-                );
-                if index+1 < |indices|{
-                    assert index+1 < |indices|;
-                    assert indices[index+1] == p_index+1;
-                }else{
-                    // assert 
-                    LemmaStrictlyIncreasing(indices);
-                    assert p_index+1 == |p.commands|;
-                }
-                assert valid_loop_program_helper(p.commands, balance, p_index+1);
-                assert 0 <= index+1 <= |indices|;
-                assert indices == Changes(p);
-                assert changes_correct(p, indices);
-                assert valid_ir(ir);
-                assert valid_program(p);
-                assert aligned_instructions(p, ir);
-                assert ( p_index+1 == |p.commands|) || (index+1 < |indices| && p_index+1 == indices[index+1]);
+            case ',' | '.' => {
                 var new_p_ind := p_index+1;
                 var new_ind := index+1;
                 var new_b := balance;
-                even_balance(p, balance, p_index, new_b, new_p_ind);
-                assert valid_loop_program_helper(p.commands, new_b, new_p_ind);
-                assert (new_p_ind == |p.commands|) || (new_ind < |indices| && new_p_ind == indices[new_ind]);
-                assert 0 <= new_ind <= |indices|;
-                aligned_implies_valid_helper(p, ir, new_b, indices, new_ind, new_p_ind);
-            }
-            case '.' =>{
-                assert (match ir.commands[index]
-                    case Jump(_, _) => false
-                    case Print => true
-                    case _ => false
-                );
-                if index+1 < |indices|{
-                    assert index+1 < |indices|;
-                    assert indices[index+1] == p_index+1;
-                }else{
-                    // assert 
-                    LemmaStrictlyIncreasing(indices);
-                    assert p_index+1 == |p.commands|;
-                }
-                assert valid_loop_program_helper(p.commands, balance, p_index+1);
-                assert 0 <= index+1 <= |indices|;
-                assert indices == Changes(p);
-                assert changes_correct(p, indices);
-                assert valid_ir(ir);
-                assert valid_program(p);
-                assert aligned_instructions(p, ir);
-                assert ( p_index+1 == |p.commands|) || (index+1 < |indices| && p_index+1 == indices[index+1]);
-                var new_p_ind := p_index+1;
-                var new_ind := index+1;
-                var new_b := balance;
-                even_balance(p, balance, p_index, new_b, new_p_ind);
-                assert valid_loop_program_helper(p.commands, new_b, new_p_ind);
-                assert (new_p_ind == |p.commands|) || (new_ind < |indices| && new_p_ind == indices[new_ind]);
-                assert 0 <= new_ind <= |indices|;
+                ValidLoopInput(p, ir, index, p_index, indices, balance, new_p_ind, new_ind, new_b);
                 aligned_implies_valid_helper(p, ir, new_b, indices, new_ind, new_p_ind);
             }
             case '>'=>{
                 ValidLoopMoveRight(p, ir, index, p_index, indices);
-                // assert (match ir.commands[index]
-                //     case Jump(_, _) => false
-                //     case _ => true
-                // );
                 var k := count_consecutive_symbols(p, p_index);
                 loop_helper_stays_constant(p, k, p_index, balance, '>');
                 var new_p_ind := p_index+k;
@@ -258,10 +208,6 @@ ensures valid_loop_ir_helper(ir.commands, balance, index)
             }
             case '<'=>{
                 ValidLoopMoveLeft(p, ir, index, p_index, indices);
-                // assert (match ir.commands[index]
-                //     case Jump(_, _) => false
-                //     case _ => true
-                // );
                 var k := count_consecutive_symbols(p, p_index);
                 loop_helper_stays_constant(p, k, p_index, balance, '<');
                 var new_p_ind := p_index+k;
@@ -270,10 +216,6 @@ ensures valid_loop_ir_helper(ir.commands, balance, index)
             }
             case '+'=>{
                 ValidLoopAdd(p, ir, index, p_index, indices);
-                // assert (match ir.commands[index]
-                //     case Jump(_, _) => false
-                //     case _ => true
-                // );
                 var k := count_consecutive_symbols(p, p_index);
                 loop_helper_stays_constant(p, k, p_index, balance, '+');
                 var new_p_ind := p_index+k;
@@ -282,10 +224,6 @@ ensures valid_loop_ir_helper(ir.commands, balance, index)
             }
             case '-'=>{
                 ValidLoopSub(p, ir, index, p_index, indices);
-                // assert (match ir.commands[index]
-                //     case Jump(_, _) => false
-                //     case _ => true
-                // );
                 var k := count_consecutive_symbols(p, p_index);
                 loop_helper_stays_constant(p, k, p_index, balance, '-');
                 var new_p_ind := p_index+k;
@@ -371,7 +309,8 @@ ensures (match ir.commands[index]
             case Jump(dest, false) => (
                 p.commands[indices[index]] == ']'
             )
-            case _ => true
+            case Move(_) => true 
+            // case _ => true
         );
     var k := count_consecutive_symbols(p, p_index);
     if index+1 < |indices|{
@@ -382,6 +321,130 @@ ensures (match ir.commands[index]
         LemmaStrictlyIncreasing(indices);
         assert p_index+k == |p.commands|;
     }
+}
+
+
+lemma ValidLoopPrint (p: Program, ir: IntermediateRep, index: int, p_index: int, indices: seq<int>, balance: int, new_p_ind: int, new_ind: int, new_b: int)
+requires valid_program(p)
+requires valid_ir(ir)
+requires balance >=0
+requires 0 <= index < |indices|
+requires p_index == indices[index]
+requires indices == Changes(p)
+requires changes_correct(p, indices)
+requires aligned_instructions(p, ir)
+requires new_p_ind == p_index+1
+requires new_ind == index+1
+requires new_b == balance
+requires valid_loop_program_helper(p.commands, balance, p_index)
+requires p.commands[p_index] == '.'
+ensures (p_index +1== |p.commands|) 
+    || (index+1 < |indices| && p_index+1 == indices[index+1])
+ensures (match ir.commands[index]
+    case Jump(_, _) => false
+    case _ => true
+)
+ensures 0 <= new_ind <= |indices|
+ensures new_b >= 0
+ensures indices == Changes(p)
+ensures changes_correct(p, indices)
+ensures valid_ir(ir)
+ensures valid_program(p)
+ensures aligned_instructions(p, ir)
+ensures (new_ind == |indices| && new_p_ind == |p.commands|) || (new_ind < |indices| && new_p_ind == indices[new_ind]) 
+ensures valid_loop_program_helper(p.commands, new_b, new_p_ind)
+
+{
+    assert (match ir.commands[index]
+        case Jump(_, _) => false
+        case Print => true
+        case _ => false
+    );
+    if index+1 < |indices|{
+        assert index+1 < |indices|;
+        assert indices[index+1] == p_index+1;
+    }else{
+        // assert 
+        LemmaStrictlyIncreasing(indices);
+        assert p_index+1 == |p.commands|;
+    }
+    assert p_index+1  == |p.commands| || (index+1 < |indices| && indices[index+1]==p_index+1);
+    assert valid_loop_program_helper(p.commands, balance, p_index+1);
+    assert 0 <= index+1 <= |indices|;
+    assert indices == Changes(p);
+    assert changes_correct(p, indices);
+    assert valid_ir(ir);
+    assert valid_program(p);
+    assert aligned_instructions(p, ir);
+    assert ( p_index+1 == |p.commands|) || (index+1 < |indices| && p_index+1 == indices[index+1]);
+    
+    even_balance(p, balance, p_index, new_b, new_p_ind);
+    assert valid_loop_program_helper(p.commands, new_b, new_p_ind);
+    assert (new_p_ind == |p.commands|) || (new_ind < |indices| && new_p_ind == indices[new_ind]);
+    assert 0 <= new_ind <= |indices|;
+
+}
+
+lemma ValidLoopInput (p: Program, ir: IntermediateRep, index: int, p_index: int, indices: seq<int>, balance: int, new_p_ind: int, new_ind: int, new_b: int)
+requires valid_program(p)
+requires valid_ir(ir)
+requires balance >=0
+requires 0 <= index < |indices|
+requires p_index == indices[index]
+requires indices == Changes(p)
+requires changes_correct(p, indices)
+requires aligned_instructions(p, ir)
+requires new_p_ind == p_index+1
+requires new_ind == index+1
+requires new_b == balance
+requires valid_loop_program_helper(p.commands, balance, p_index)
+requires p.commands[p_index] == ',' || p.commands[p_index] == '.'
+ensures (p_index +1== |p.commands|) 
+    || (index+1 < |indices| && p_index+1 == indices[index+1])
+ensures (match ir.commands[index]
+    case Jump(_, _) => false
+    case _ => true
+)
+ensures 0 <= new_ind <= |indices|
+ensures new_b >= 0
+ensures indices == Changes(p)
+ensures changes_correct(p, indices)
+ensures valid_ir(ir)
+ensures valid_program(p)
+ensures aligned_instructions(p, ir)
+ensures (new_ind == |indices| && new_p_ind == |p.commands|) || (new_ind < |indices| && new_p_ind == indices[new_ind]) 
+ensures valid_loop_program_helper(p.commands, new_b, new_p_ind)
+
+{
+    assert (match ir.commands[index]
+        case Jump(_, _) => false
+        case UserInput => true
+        case Print => true
+        case _ => false
+    );
+    if index+1 < |indices|{
+        assert index+1 < |indices|;
+        assert indices[index+1] == p_index+1;
+    }else{
+        // assert 
+        LemmaStrictlyIncreasing(indices);
+        assert p_index+1 == |p.commands|;
+    }
+    assert p_index+1  == |p.commands| || (index+1 < |indices| && indices[index+1]==p_index+1);
+    assert valid_loop_program_helper(p.commands, balance, p_index+1);
+    assert 0 <= index+1 <= |indices|;
+    assert indices == Changes(p);
+    assert changes_correct(p, indices);
+    assert valid_ir(ir);
+    assert valid_program(p);
+    assert aligned_instructions(p, ir);
+    assert ( p_index+1 == |p.commands|) || (index+1 < |indices| && p_index+1 == indices[index+1]);
+    
+    even_balance(p, balance, p_index, new_b, new_p_ind);
+    assert valid_loop_program_helper(p.commands, new_b, new_p_ind);
+    assert (new_p_ind == |p.commands|) || (new_ind < |indices| && new_p_ind == indices[new_ind]);
+    assert 0 <= new_ind <= |indices|;
+
 }
 
 lemma ValidLoopAdd (p: Program, ir: IntermediateRep, index: int, p_index: int, indices: seq<int>)

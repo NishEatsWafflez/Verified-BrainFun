@@ -4,7 +4,7 @@ include "steps.dfy"
 include "equivalence.dfy"
 include "triviallemmas.dfy"
 include "loops.dfy"
-
+include "compilationhelper.dfy"
 
 
 module BrainFun {
@@ -14,82 +14,77 @@ import opened Steps
 import opened Equivalence
 import opened Trivial
 import opened Loops
+import opened CompilationHelper
 
 method CreateFinalIR(p: Program, commands: seq<Instr>) returns (result: IntermediateRep)
 requires valid_program(p) //Trivially proven
+requires valid_loop_program(p)
 requires valid_input(p.input) //Trivially proven
 requires |commands| == |Changes(p)| //Not trivially proven
 requires changes_correct(p, Changes(p)) //Already proven
+requires valid_ir_commands(commands)
 requires matched_forall_loop(p, commands, Changes(p), |commands|) //Not trivially proven yet
 ensures valid_ir(result)
 ensures aligned_instructions(p, result)
 ensures valid_input(result.input)
-ensures EquivalentReps(p, InitialState(), result)
+ensures valid_loop_ir(result)
+ensures FullEquivalence(p, result)
 
 {
   result := IntermediateRep(commands, 0, p.input);
-    var s:= InitialState();
-  // assert aligned_instructions(p, compiled_ir);
-  //TODO: remove the assumption here and replace with a pre-cond
-  assume valid_ir(result);
-  MaxSteps(p, InitialState());
-  IrStep(result, InitialState());
-  AlignmentMeansEquivalence(p, InitialState(), result);
+  AlignmentMeansEquivalenceAllStates(p, result);
+  aligned_implies_valid(p, result);
   assert valid_input(result.input);
-  assert EquivalentReps(p, InitialState(), result);
-
-}
-
-method AddElementToStack(loop: seq<int>, commands: seq<Instr>) returns (result: seq<int>)
-requires loop_less_than_commands(loop, commands)
-requires |commands| > 0
-requires commands[|commands|-1] == Jump(0, true)
-ensures loop_less_than_commands(result, commands)
-
-{
-  result := loop;
-  assert loop_less_than_commands(result, commands);
-  result := result + [|commands|-1];
-  assert loop_less_than_commands(result, commands);
 }
 
 
-//TODO: make sure that all of these hold before calling from main function, especially need to fix the commands[index] one :)
+
 method ReplaceElementInInstr(p: Program, commands: seq<Instr>, indices: seq<int>, j: int, loop_stack: seq<int>) returns (result: seq<Instr>)
 requires valid_program(p)
 requires indices == Changes(p)
 requires changes_correct(p, indices)
+requires 0 <= j
 requires 0 <= j+1 <= |indices|
 requires 0 <= j+1 <= |commands|
 requires |loop_stack| > 0
+requires |commands| > 1
+requires commands[|commands|-1] == Jump(0, false)
 requires matched_forall_loop(p, commands, indices, j+1)
+
+requires valid_ir_commands(commands)
 requires loop_less_than_commands(loop_stack, commands)
 ensures |result| == |commands|
 ensures matched_forall_loop(p, result, indices, j+1)
 ensures loop_less_than_commands(loop_stack, result)
+ensures valid_ir_commands(result)
+ensures matched_command_with_ir(p, result, j, indices)
 
 {
   var index := loop_stack[|loop_stack|-1];
   assert index in loop_stack;
   assert 0 <= index < |commands|;
-  result := commands[..index] + [Jump(|commands|-1, true)] + commands[index+1..];
-  ReplacingJumpWithJump(p, commands, result, index, indices, j+1);
-  //TODO: replace end index with index!!! yippee yahoo im having so much dafny fun!!!
+  var result1 := commands[..index] + [Jump(|commands|-1, true)] + commands[index+1..];
+  ReplacingJumpWithJump(p, commands, result1, index, indices, j+1);
+  result := result1[..|result1|-1] + [Jump(index, false)];
+  ReplacingEndJumpWithJump(p, result1, result, |commands|-1, indices, j+1);
+  assert matched_forall_loop(p, result, indices, j+1);
+  assert loop_less_than_commands(loop_stack, result);
+  MatchedForallImpliesMatchedOne(p, result, indices, j);
 }
 
 
-// The main compile method, still need to verify that the result is correct :D
 method Compile(p: Program)  returns (result: IntermediateRep)
   requires valid_program(p)
   requires |p.commands| > 0
-  // requires |p.input| > 0
+  requires valid_loop_program(p)
   requires |p.input| == |p.commands|
   requires p.pointer == 0
   requires valid_input(p.input)
   
   ensures valid_ir(result)
   ensures valid_input(result.input)
-  ensures EquivalentReps(p, InitialState(), result)
+  ensures valid_loop_ir(result)
+  ensures FullEquivalence(p, result)
 
 {
   var i: int := 0;
@@ -142,7 +137,9 @@ method Compile(p: Program)  returns (result: IntermediateRep)
     invariant matched_forall_loop(p, commands, next_command_indices, j)
     invariant in_bounds_commands(p, next_command_indices)
     invariant loop_less_than_commands(loop_start_stack, commands)
+    invariant valid_ir_commands(commands)
   {
+    assert valid_ir_commands(commands);
     assert loop_less_than_commands(loop_start_stack, commands);
     assert j == |indices_of_i|;
     assert j <= |next_command_indices| ==> indices_of_i == next_command_indices[..j];
@@ -175,218 +172,41 @@ method Compile(p: Program)  returns (result: IntermediateRep)
     assert forall k:: int_in_seq(k, indices_of_i) ==> int_in_seq(k, next_command_indices);
     assert next_command_indices[j]==i;
     {match p.commands[i]
-      case '+' =>
-        assert matched_forall_loop(p, commands, next_command_indices, j);
-        var k:= count_consecutive_symbols(p, i);
-        implication_with_and(p, i, k, next_command_indices); 
-        assert (i in next_command_indices && next_step(p, i, k, next_command_indices)) ==> inside_the_indices(p, next_command_indices, i+k);
-        assert i in next_command_indices ==> next_step(p, i, k, next_command_indices);
-        step_is_indices(p, i, k, next_command_indices);
-        assert (i in next_command_indices) ==> inside_the_indices(p, next_command_indices, i+k);
-        assert matched_forall_loop(p, commands, next_command_indices, j);
+    case '+' =>
+      assert i >= 0;
+      assert valid_program(p);
+      assert next_command_indices == Changes(p);
+      assert |p.commands| > 0;
+      assert |p.input| == |p.commands|;
+      assert p.pointer == 0;
+      assert valid_input(p.input);
+      assert |commands|>=0;
+      assert changes_correct(p, next_command_indices);
+      assert sub_changes_inclusion_1_step(p, next_command_indices);
+      assert inside_the_indices(p, next_command_indices, i); //i is either greater than |p.commands| or i is in the indices
+      assert 0<=j < |next_command_indices|;
+      assert j < |next_command_indices| ==> next_command_indices[j]==i;
+      assert i >= |p.commands| ==> !(i in next_command_indices);
+      assert i >= |p.commands| ==> j >= |next_command_indices|;
+      assert j == |commands|;
+      assert old_i == i;
+      assert p.commands[next_command_indices[j]] == '+';
+      assert matched_forall_loop(p, commands, next_command_indices, j);
+      assert in_bounds_commands(p, next_command_indices);
+      assert loop_less_than_commands(loop_start_stack, commands);
+      assert valid_ir_commands(commands);    
+      commands, i := CompilePlus(p, commands, i, next_command_indices, j, old_i, loop_start_stack);
+    case '-' =>
+        commands, i := CompileMinus(p, commands, i, next_command_indices, j, old_i, loop_start_stack);
+    case '>' =>
+        commands, i := CompileRightShift(p, commands, i, next_command_indices, j, old_i, loop_start_stack);
 
-        commands := commands+ [Inc(k)]; 
-        assert matched_forall_loop(p, commands[..j], next_command_indices, j);
-        IncreasingArrayDoesntAffectMatching(p, commands, j, next_command_indices);
-        assert matched_forall_loop(p, commands, next_command_indices, j);
+    case '<' =>
+      commands, i := CompileLeftShift(p, commands, i, next_command_indices, j, old_i, loop_start_stack);
 
-        assert |commands| >0;
-        assert (old_i in next_command_indices) ==> inside_the_indices(p, next_command_indices, i+k);
-        assert relation_between_old_new(p, old_i, i+k, next_command_indices);
-        var temp := i+k;      
-        addition_is_preserving(p, old_i, i, k, temp, next_command_indices);
-        assert relation_between_old_new(p, old_i, temp, next_command_indices);
-
-        i := temp;
-        assert i-old_i == k;
-        assert (old_i in next_command_indices) ==> inside_the_indices(p, next_command_indices, i);
-        assert p.commands[next_command_indices[j]] == '+';
-        assert k == count_consecutive_symbols(p, next_command_indices[j]);
-        assert k >= 0;
-        assert commands[j] == Inc(k);
-        AndIsImplicationPlus(p, commands, j, next_command_indices, k);
-        assert matched_command_with_ir(p, commands, j, next_command_indices);
-        assert matched_forall_loop(p, commands, next_command_indices, j+1);
-        assert in_bounds_commands(p, next_command_indices);
-        assert loop_less_than_commands(loop_start_stack, commands);
-      case '-' =>
-        assert matched_forall_loop(p, commands, next_command_indices, j);
-        var k:= count_consecutive_symbols(p, i);
-        var neg_k: int := k;
-        neg_k := -1*neg_k;
-        implication_with_and(p, i, k, next_command_indices); 
-        assert (i in next_command_indices && next_step(p, i, k, next_command_indices)) ==> inside_the_indices(p, next_command_indices, i+k);
-        assert i in next_command_indices ==> next_step(p, i, k, next_command_indices);
-        step_is_indices(p, i, k, next_command_indices);
-        assert (i in next_command_indices) ==> inside_the_indices(p, next_command_indices, i+k);
-        assert matched_forall_loop(p, commands, next_command_indices, j);
-
-        commands := commands+ [Inc(neg_k)];
-        assert matched_forall_loop(p, commands[..j], next_command_indices, j);
-        IncreasingArrayDoesntAffectMatching(p, commands, j, next_command_indices);
-        assert matched_forall_loop(p, commands, next_command_indices, j);
-
-        assert |commands| >0;
-        assert (old_i in next_command_indices) ==> inside_the_indices(p, next_command_indices, i+k);
-        assert relation_between_old_new(p, old_i, i+k, next_command_indices);
-        var temp := i+k;      
-        addition_is_preserving(p, old_i, i, k, temp, next_command_indices);
-        assert relation_between_old_new(p, old_i, temp, next_command_indices);
-
-        i := temp;
-        assert i-old_i == k;
-        assert (old_i in next_command_indices) ==> inside_the_indices(p, next_command_indices, i);
-        assert p.commands[next_command_indices[j]] == '-';
-        assert k == count_consecutive_symbols(p, next_command_indices[j]);
-        assert neg_k <  0;
-        assert commands[j] == Inc(neg_k);
-        AndIsImplicationMinus(p, commands, j, next_command_indices, neg_k);
-        assert matched_command_with_ir(p, commands, j, next_command_indices);
-        assert matched_forall_loop(p, commands, next_command_indices, j+1);
-        assert in_bounds_commands(p, next_command_indices);
-        assert loop_less_than_commands(loop_start_stack, commands);
-
-       case '>' =>
-        assert matched_forall_loop(p, commands, next_command_indices, j);
-        var k:= count_consecutive_symbols(p, i);
-        implication_with_and(p, i, k, next_command_indices); 
-        assert (i in next_command_indices && next_step(p, i, k, next_command_indices)) ==> inside_the_indices(p, next_command_indices, i+k);
-        bigger_step_within_range(p, i, k, next_command_indices);
-        assert i in next_command_indices ==> next_step(p, i, k, next_command_indices);
-        step_is_indices(p, i, k, next_command_indices);
-        assert (i in next_command_indices) ==> inside_the_indices(p, next_command_indices, i+k);
-        assert matched_forall_loop(p, commands, next_command_indices, j);
-        assert p.commands[next_command_indices[j]] == '>';
-        commands := commands+ [Move(k)];
-        assert matched_forall_loop(p, commands[..j], next_command_indices, j);
-        IncreasingArrayDoesntAffectMatching(p, commands, j, next_command_indices);
-        assert matched_forall_loop(p, commands, next_command_indices, j);
-
-        assert |commands| >0;
-        assert (old_i in next_command_indices) ==> inside_the_indices(p, next_command_indices, i+k);
-        assert relation_between_old_new(p, old_i, i+k, next_command_indices);
-        var temp := i+k;      
-        addition_is_preserving(p, old_i, i, k, temp, next_command_indices);
-        assert relation_between_old_new(p, old_i, temp, next_command_indices);
-
-        i := temp;
-        assert i-old_i == k;
-        assert (old_i in next_command_indices) ==> inside_the_indices(p, next_command_indices, i);
-        assert p.commands[next_command_indices[j]] == '>';
-        assert k == count_consecutive_symbols(p, next_command_indices[j]);
-        assert k >= 0;
-        assert commands[j] == Move(k);
-        AndIsImplicationMoveForwards(p, commands, j, next_command_indices, k);
-
-        assert matched_command_with_ir(p, commands, j, next_command_indices);
-        assert matched_forall_loop(p, commands, next_command_indices, j+1);
-        assert in_bounds_commands(p, next_command_indices);
-        assert loop_less_than_commands(loop_start_stack, commands);
-
-      case '<' =>
-        assert matched_forall_loop(p, commands, next_command_indices, j);
-        var k:= count_consecutive_symbols(p, i);
-        var neg_k: int := k;
-        neg_k := -1*neg_k;
-        implication_with_and(p, i, k, next_command_indices); 
-        assert (i in next_command_indices && next_step(p, i, k, next_command_indices)) ==> inside_the_indices(p, next_command_indices, i+k);
-        bigger_step_within_range(p, i, k, next_command_indices);
-        step_is_indices(p, i, k, next_command_indices);
-        assert (i in next_command_indices) ==> inside_the_indices(p, next_command_indices, i+k);
-        assert matched_forall_loop(p, commands, next_command_indices, j);
-
-        commands := commands+ [Move(neg_k)];
-        assert matched_forall_loop(p, commands[..j], next_command_indices, j);
-        IncreasingArrayDoesntAffectMatching(p, commands, j, next_command_indices);
-        assert matched_forall_loop(p, commands, next_command_indices, j);
-
-        assert |commands| >0;
-        assert (old_i in next_command_indices) ==> inside_the_indices(p, next_command_indices, i+k);
-        assert relation_between_old_new(p, old_i, i+k, next_command_indices);
-        var temp := i+k;      
-        addition_is_preserving(p, old_i, i, k, temp, next_command_indices);
-        assert relation_between_old_new(p, old_i, temp, next_command_indices);
-
-        i := temp;
-        assert i-old_i == k;
-        assert (old_i in next_command_indices) ==> inside_the_indices(p, next_command_indices, i);
-        assert p.commands[next_command_indices[j]] == '<';
-        assert k == count_consecutive_symbols(p, next_command_indices[j]);
-        assert neg_k <  0;
-        assert commands[j] == Move(neg_k);
-        AndIsImplicationMoveBackwards(p, commands, j, next_command_indices, neg_k);
-        assert matched_command_with_ir(p, commands, j, next_command_indices);
-        assert matched_forall_loop(p, commands, next_command_indices, j+1);
-        assert in_bounds_commands(p, next_command_indices);
-        assert loop_less_than_commands(loop_start_stack, commands);
-
-      case '.' | ',' =>        
-        assert matched_forall_loop(p, commands, next_command_indices, j);
-        var k:= 1;
-        implication_with_and(p, i, k, next_command_indices); 
-        assert (i in next_command_indices && next_step(p, i, k, next_command_indices)) ==> inside_the_indices(p, next_command_indices, i+k);
-        single_step_within_range(p, i, k, next_command_indices);
-        step_is_indices(p, i, k, next_command_indices);
-        assert (i in next_command_indices) ==> inside_the_indices(p, next_command_indices, i+k);
-        assert matched_forall_loop(p, commands, next_command_indices, j);
-
-        if p.commands[next_command_indices[j]]== '.'{
-          commands := commands+ [Print];
-          assert |commands| >0;
-          assert matched_forall_loop(p, commands[..j], next_command_indices, j);
-          IncreasingArrayDoesntAffectMatching(p, commands, j, next_command_indices);
-          assert matched_forall_loop(p, commands, next_command_indices, j);
-          assert (old_i in next_command_indices) ==> inside_the_indices(p, next_command_indices, i+k);
-          assert relation_between_old_new(p, old_i, i+k, next_command_indices);
-
-          var temp := i+k;      
-          addition_is_preserving(p, old_i, i, k, temp, next_command_indices);
-          assert relation_between_old_new(p, old_i, temp, next_command_indices);
-          i := temp;
-          assert i-old_i == k;
-          single_step_within_range(p, old_i, k, next_command_indices);
-
-          assert (old_i in next_command_indices) ==> inside_the_indices(p, next_command_indices, i);
-          simple_exclusion(p.commands[next_command_indices[j]]);
-          assert !(p.commands[next_command_indices[j]] in ['+', '-', '<', '>']);
-          assert commands[j] == Print;
-          AndIsImplicationPrint(p, commands, j, next_command_indices);
-
-          
-        } else{
-          assert p.commands[next_command_indices[j]] == ',';
-          commands := commands+ [UserInput];
-          assert |commands| >0;
-
-          assert matched_forall_loop(p, commands[..j], next_command_indices, j);
-          IncreasingArrayDoesntAffectMatching(p, commands, j, next_command_indices);
-          assert matched_forall_loop(p, commands, next_command_indices, j);
-          assert (old_i in next_command_indices) ==> inside_the_indices(p, next_command_indices, i+k);
-          assert relation_between_old_new(p, old_i, i+k, next_command_indices);
-
-          var temp := i+k;      
-          addition_is_preserving(p, old_i, i, k, temp, next_command_indices);
-          assert relation_between_old_new(p, old_i, temp, next_command_indices);
-          i := temp;
-          assert i-old_i == k;
-          single_step_within_range(p, old_i, k, next_command_indices);
-
-          assert (old_i in next_command_indices) ==> inside_the_indices(p, next_command_indices, i);
-          assert p.commands[next_command_indices[j]] == ',';
-          simple_exclusion_2(p.commands[next_command_indices[j]]);
-          assert !(p.commands[next_command_indices[j]] in ['+', '-', '<', '>']);
-          assert commands[j] == UserInput;
-          AndIsImplicationInput(p, commands, j, next_command_indices);
-
-
-          
-        }
+    case '.' | ',' =>        
+      commands, i := CompileIO(p, commands, i, next_command_indices, j, old_i, loop_start_stack);  
   
-        assert matched_command_with_ir(p, commands, j, next_command_indices);
-        assert matched_forall_loop(p, commands, next_command_indices, j+1);
-        assert in_bounds_commands(p, next_command_indices);
-        assert loop_less_than_commands(loop_start_stack, commands);
-
     case '[' | ']' =>
         assert matched_forall_loop(p, commands, next_command_indices, j);
         var k:= 1;
@@ -397,294 +217,54 @@ method Compile(p: Program)  returns (result: IntermediateRep)
         assert (i in next_command_indices) ==> inside_the_indices(p, next_command_indices, i+k);
         assert matched_forall_loop(p, commands, next_command_indices, j);
         assert |commands| >= 0;
+
+            
         if p.commands[next_command_indices[j]] == '['{
-
-          assert j == |commands|;
-          assert p.commands[next_command_indices[j]] == '[';
-          commands := commands+ [Jump(0, true)];
-          assert commands[|commands|-1] == Jump(0, true);
-          assert j == |commands|-1;
-          assert commands[j] == Jump(0, true);
-          assert |commands| >0;
-
-          assert matched_forall_loop(p, commands[..j], next_command_indices, j);
-          IncreasingArrayDoesntAffectMatching(p, commands, j, next_command_indices);
-          assert matched_forall_loop(p, commands, next_command_indices, j);
-          assert (old_i in next_command_indices) ==> inside_the_indices(p, next_command_indices, i+k);
-          assert relation_between_old_new(p, old_i, i+k, next_command_indices);
-
-          var temp := i+k;      
-          addition_is_preserving(p, old_i, i, k, temp, next_command_indices);
-          assert relation_between_old_new(p, old_i, temp, next_command_indices);
-          i := temp;
-          assert i-old_i == k;
-          single_step_within_range(p, old_i, k, next_command_indices);
-          assert commands[|commands|-1] == Jump(0, true);
-
-          assert (old_i in next_command_indices) ==> inside_the_indices(p, next_command_indices, i);
-          assert p.commands[next_command_indices[j]] == '[';
-          simple_exclusion_2(p.commands[next_command_indices[j]]);
-          assert !(p.commands[next_command_indices[j]] in ['+', '-', '<', '>']);
-          // assume false;
-          // assert commands[j] == Jump(0, true);
-
-          AndIsImplicationJumpFor(p, commands, j, next_command_indices, 0);
-          // assert |commands| >0;
-          // assert j == |commands|-1;
-          assert commands[|commands|-1] == Jump(0, true);
-
-          // assume loop_less_than_commands(loop_start_stack, commands);
-          // assume |commands| > 0;
-          // assume commands[|commands|-1] == Jump(0, true);
-
-          // assume commands[|commands|-1] == Jump(0, true);
-          assert loop_less_than_commands(loop_start_stack, commands);
+          commands, i := CompileTrueJump(p, commands, i, next_command_indices, j, old_i, loop_start_stack);
           loop_start_stack := AddElementToStack(loop_start_stack, commands);
-          // assert loop_less_than_commands(loop_start_stack[..|loop_start_stack|-1], commands);
-          // SubArrayLoopSubArray(loop_start_stack, commands);
-          assert loop_less_than_commands(loop_start_stack, commands);
-        } else{
-          assert p.commands[next_command_indices[j]] == ']';
-          commands := commands+ [Jump(0, false)];
-          assert |commands| >0;
-
-          // assert loop_less_than_commands(loop_start_stack, commands[..j]);
-          // IncreasingArrayDoesntAffectLoops(commands, loop_start_stack, j);
           assert loop_less_than_commands(loop_start_stack, commands);
 
-          assert matched_forall_loop(p, commands[..j], next_command_indices, j);
-          IncreasingArrayDoesntAffectMatching(p, commands, j, next_command_indices);
-          assert matched_forall_loop(p, commands, next_command_indices, j);
-          assert (old_i in next_command_indices) ==> inside_the_indices(p, next_command_indices, i+k);
-          assert relation_between_old_new(p, old_i, i+k, next_command_indices);
-          var temp := i+k;      
-          addition_is_preserving(p, old_i, i, k, temp, next_command_indices);
-          assert relation_between_old_new(p, old_i, temp, next_command_indices);
-          i := temp;
-          assert i-old_i == k;
-          single_step_within_range(p, old_i, k, next_command_indices);
-          assert loop_less_than_commands(loop_start_stack, commands);
-
-          assert (old_i in next_command_indices) ==> inside_the_indices(p, next_command_indices, i);
-          assert p.commands[next_command_indices[j]] == ']';
-          simple_exclusion(p.commands[next_command_indices[j]]);
-          assert !(p.commands[next_command_indices[j]] in ['+', '-', '<', '>']);
-          assert commands[j] == Jump(0, false);
-          AndIsImplicationJumpBack(p, commands, j, next_command_indices, 0);
-          assert loop_less_than_commands(loop_start_stack, commands);
-          assert matched_forall_loop(p, commands, next_command_indices, j+1);
-
+        }  
+        else {
+          commands, i := CompileFalseJump(p, commands, i, next_command_indices, j, old_i, loop_start_stack);
           if |loop_start_stack| > 0{
             assert loop_less_than_commands(loop_start_stack, commands);
             assert |loop_start_stack| > 0;
-            // var start_index := loop_start_stack[|loop_start_stack| - 1];        
-            // assert start_index in loop_start_stack;
-            // // assume false;
-            // assert 0 <= start_index < |commands|;
-            // // loop_start_stack := loop_start_stack[0 .. |loop_start_stack| - 1];
-
-            // assert |commands[0..start_index]| == start_index; 
-
-            // assert (match commands[start_index]
-            //   case Jump(_, true) => true
-            //   case _ => false);
-            // // assert commands[start_index] == Jump(0, true);
-            // assume commands[start_index] == Jump(0, true);
             assert valid_program(p);
             assert next_command_indices == Changes(p);
             assert changes_correct(p, next_command_indices);
             assert 0 <= j+1 <= |next_command_indices|;
             assert 0 <= j+1 <= |commands|;
+            assert |loop_start_stack| > 0;
+            assert |commands| > 1;
+            assert commands[|commands|-1] == Jump(0, false);
             assert matched_forall_loop(p, commands, next_command_indices, j+1);
+            assert valid_ir_commands(commands);
             assert loop_less_than_commands(loop_start_stack, commands);
-            // assume false;
-            var new_commands := ReplaceElementInInstr(p, commands, next_command_indices, j, loop_start_stack);
-            // assert matched_forall_loop(p, new_commands, next_command_indices, j+1);
-            // assert loop_less_than_commands(loop_start_stack, new_commands);
-
-            // assume false;
-            commands := new_commands;
-            // assert matched_forall_loop(p, commands, next_command_indices, j+1);
-            assert in_bounds_commands(p, next_command_indices);
+            commands := ReplaceElementInInstr(p, commands, next_command_indices, j, loop_start_stack);
+            ShrinkingLoopStartStack(loop_start_stack, commands);
+            loop_start_stack := loop_start_stack[..|loop_start_stack|-1];
             assert loop_less_than_commands(loop_start_stack, commands);
-            // assume false;
-
-            // // var new_commands := commands[0 .. start_index] + [Jump(|commands|-1, true)] + commands[start_index+1..];
-            // // ReplacingJumpProperties(commands, new_commands, start_index, commands);
-            // // assert |new_commands| == |commands|;
-            // assume false;
-            // ReplacingJumpWithJump(p, commands, new_commands, start_index, next_command_indices, j+1);
           }
 
 
         }
-
-        // assert matched_command_with_ir(p, commands, j, next_command_indices);
         assert matched_forall_loop(p, commands, next_command_indices, j+1);
         assert in_bounds_commands(p, next_command_indices);
         assert loop_less_than_commands(loop_start_stack, commands);
+        assert valid_ir_commands(commands);
 
-    // case ']' =>{ 
-    //   // assert ret >= 0;
-
-    //   var k:= 1;
-    //   implication_with_and(p, i, k, next_command_indices); 
-    //   assert (i in next_command_indices && next_step(p, i, k, next_command_indices)) ==> inside_the_indices(p, next_command_indices, i+k);
-    //   single_step_within_range_close_loop(p, i, k, next_command_indices);
-    //   step_is_indices(p, i, k, next_command_indices);
-    //   assert (i in next_command_indices) ==> inside_the_indices(p, next_command_indices, i+k);
-    //   commands := commands + [Jump(0, false)];
-    //   assert |commands|>0;
-    //   assert matched_forall_loop(p, commands[..j], next_command_indices, j);
-    //   IncreasingArrayDoesntAffectMatching(p, commands, j, next_command_indices);
-    //   assert matched_forall_loop(p, commands, next_command_indices, j);
-    //   assert (old_i in next_command_indices) ==> inside_the_indices(p, next_command_indices, i+k);
-    //   assert relation_between_old_new(p, old_i, i+k, next_command_indices);
-
-    //   var temp := i+k;      
-    //   addition_is_preserving(p, old_i, i, k, temp, next_command_indices);
-    //   assert relation_between_old_new(p, old_i, temp, next_command_indices);
-    //   i := temp;
-    //   assert i-old_i == k;
-    //   single_step_within_range_close_loop(p, old_i, k, next_command_indices);
-
-    //   assert (old_i in next_command_indices) ==> inside_the_indices(p, next_command_indices, i);
-
-    //   assert p.commands[next_command_indices[j]] == ']';
-    //   simple_exclusion(p.commands[next_command_indices[j]]);
-    //   assert commands[j] == Jump(0, false);
-    //   AndIsImplicationJumpBack(p, commands, j, next_command_indices, 0);
-
-    //   assert matched_command_with_ir(p, commands, j, next_command_indices);
-    //   assert matched_forall_loop(p, commands, next_command_indices, j+1);
-    //   assert in_bounds_commands(p, next_command_indices);
-    //   // if |loop_start_stack| > 0{
-    //   //   var start_index := loop_start_stack[|loop_start_stack| - 1];        
-    //   //   // loop_start_stack := loop_start_stack[0 .. |loop_start_stack| - 1];
-    //   //   // assert 0 <= start_index < |commands|;
-    //   //   // assert |commands[0..start_index]| == start_index;  
-    //   //   // var new_commands := commands[0 .. start_index] + [Jump(|commands|-1, true)] + commands[start_index+1..];
-    //   //   // assert |new_commands| == |commands|;
-    //   //   // ReplacingJumpWithJump(p, commands, new_commands, start_index, next_command_indices, j+1);
-
-    //   // }
-
-        
-
-    //     // commands := new_commands;
-
-
-    //     // assert matched_forall_loop(p, commands, next_command_indices, j);
-    //     // var k:= 1;
-    //     // implication_with_and(p, i, k, next_command_indices); 
-    //     // assert (i in next_command_indices && next_step(p, i, k, next_command_indices)) ==> inside_the_indices(p, next_command_indices, i+k);
-    //     // single_step_within_range(p, i, k, next_command_indices);
-    //     // step_is_indices(p, i, k, next_command_indices);
-    //     // assert (i in next_command_indices) ==> inside_the_indices(p, next_command_indices, i+k);
-    //     // assert matched_forall_loop(p, commands, next_command_indices, j);
-    //     // assert |commands| >= 0;
-    //     // commands := commands + [Jump(0, false)];
-    //     // assert |commands|>0;
-    //     // assert matched_forall_loop(p, commands[..j], next_command_indices, j);
-    //     // IncreasingArrayDoesntAffectMatching(p, commands, j, next_command_indices);
-    //     // assert matched_forall_loop(p, commands, next_command_indices, j);
-
-    //     // var temp := i+k;      
-    //     // addition_is_preserving(p, old_i, i, k, temp, next_command_indices);
-    //     // assert relation_between_old_new(p, old_i, temp, next_command_indices);
-    //     // i := temp;
-    //     // assert i-old_i == k;
-    //     // single_step_within_range(p, old_i, k, next_command_indices);
-
-    //     // assert (old_i in next_command_indices) ==> inside_the_indices(p, next_command_indices, i);
-
-    //     // assert p.commands[next_command_indices[j]] == ']';
-    //     // simple_exclusion_2(p.commands[next_command_indices[j]]);
-    //     // assert !(p.commands[next_command_indices[j]] in ['+', '-', '<', '>']);
-    //     // assert commands[j] == Jump(0, false);
-    //     // AndIsImplicationJumpBack(p, commands, j, next_command_indices, 0);
-
-    //     // assert matched_command_with_ir(p, commands, j, next_command_indices);
-    //     // assert matched_forall_loop(p, commands, next_command_indices, j+1);
-    //     // assert in_bounds_commands(p, next_command_indices);
-
-      
-    //     assert loop_less_than_commands(loop_start_stack, commands);
-    // }
-
-    case _ => {assume false;}
-    
-    /*  case ']' =>
-        if |loop_start_stack| > 0 {
-
-          var start_index := loop_start_stack[|loop_start_stack| - 1];
-        
-          loop_start_stack := loop_start_stack[0 .. |loop_start_stack| - 1];
-          assert |commands[0..start_index]| == start_index;
-          assert matched_forall_loop(p, commands, next_command_indices, j);
-          var k:= 1;
-          implication_with_and(p, i, k, next_command_indices); 
-          assert (i in next_command_indices && next_step(p, i, k, next_command_indices)) ==> inside_the_indices(p, next_command_indices, i+k);
-          single_step_within_range(p, i, k, next_command_indices);
-          step_is_indices(p, i, k, next_command_indices);
-          assert (i in next_command_indices) ==> inside_the_indices(p, next_command_indices, i+k);
-          assert matched_forall_loop(p, commands, next_command_indices, j);
-          assert |commands| >= 0;
-          commands := commands[0 .. start_index] + [Jump(|commands|, true)] + commands[start_index+1..] + [Jump(start_index,false)];
-          assert |commands|>0;
-          assert matched_forall_loop(p, commands[..j], next_command_indices, j);
-          IncreasingArrayDoesntAffectMatching(p, commands, j, next_command_indices);
-          assert matched_forall_loop(p, commands, next_command_indices, j);
-
-          assert (old_i in next_command_indices) ==> inside_the_indices(p, next_command_indices, i+k);
-          assert relation_between_old_new(p, old_i, i+k, next_command_indices);
-
-          var temp := i+k;      
-          addition_is_preserving(p, old_i, i, k, temp, next_command_indices);
-          assert relation_between_old_new(p, old_i, temp, next_command_indices);
-          i := temp;
-          assert i-old_i == k;
-          single_step_within_range(p, old_i, k, next_command_indices);
-
-          assert (old_i in next_command_indices) ==> inside_the_indices(p, next_command_indices, i);
-
-          assert p.commands[next_command_indices[j]] == '[';
-          simple_exclusion_2(p.commands[next_command_indices[j]]);
-          assert !(p.commands[next_command_indices[j]] in ['+', '-', '<', '>']);
-          assert commands[j] == Jump(0, true);
-          AndIsImplicationJumpBack(p, commands, j, next_command_indices, 0);
-
-          assert matched_command_with_ir(p, commands, j, next_command_indices);
-          assert matched_forall_loop(p, commands, next_command_indices, j+1);
-          assert in_bounds_commands(p, next_command_indices);
-
-          // assert (|loop_start_stack|>0) ==> loop_start_stack[|loop_start_stack|-1] < start_index;
-          // assert (|loop_start_stack|>0) ==> loop_start_stack[|loop_start_stack|-1] <start_index < |commands|;  
-          // assert (|loop_start_stack| > 0) ==> loop_start_stack[|loop_start_stack| - 1] < |commands|;
-          // assert forall i :: 1 <= i < |loop_start_stack| ==> loop_start_stack[i - 1] < loop_start_stack[i] ;
-          // if (|loop_start_stack| > 0) {
-          //     LemmaStrictlyIncreasing(loop_start_stack);
-          //     AllLessThanLast(loop_start_stack); 
-          //     assert forall i :: 0 <= i < |loop_start_stack| ==> loop_start_stack[i] <= loop_start_stack[|loop_start_stack|-1];
-          // } else{
-          //     assert forall i :: 0 <= i < |loop_start_stack|==> loop_start_stack[i] < loop_start_stack[|loop_start_stack|-1]; 
-          // }
-
-
-          // assert |loop_start_stack| > 0 ==> 0 < loop_start_stack[|loop_start_stack|-1]+1;
-
-
-        assert |commands|>0;
-        } */
+    case _ => {assume{:axiom} false;}
     
     }
+    assert valid_ir_commands(commands);
     assert loop_less_than_commands(loop_start_stack, commands);
     assert j== |commands|-1;
     assert matched_forall_loop(p, commands, next_command_indices, j+1);
     assert in_bounds_commands(p, next_command_indices);
-
     assert old_i in next_command_indices ==> inside_the_indices(p, next_command_indices, i);
     assert inside_the_indices(p, next_command_indices, i);
+
     assert j < |next_command_indices| ==> indices_of_i[j] == next_command_indices[j];
     assert j+1 <= |next_command_indices| ==> j < |next_command_indices|;
     assert 1<= j+1 <= |next_command_indices| ==> indices_of_i[j] == next_command_indices[j];
@@ -700,11 +280,9 @@ method Compile(p: Program)  returns (result: IntermediateRep)
     addition_preserving_3(indices_of_i, next_command_indices, j, k);
     assert k <= |next_command_indices| ==> indices_of_i == next_command_indices[..k];
 
-    // assert k <= |next_command_indices| ==> indices_of_i == next_command_indices[..k];
     assert matched_forall_loop(p, commands, next_command_indices, k);
 
     j := k;
-    // assert matched_forall_loop(p, commands, next_command_indices, j);
 
 
     assert j <= |next_command_indices| ==> indices_of_i == next_command_indices[..j];
@@ -719,6 +297,7 @@ method Compile(p: Program)  returns (result: IntermediateRep)
     assert i >= 0;
     assert |commands| >=0;
     assert sub_changes_inclusion_1_step(p, next_command_indices);
+
     assert inside_the_indices(p, next_command_indices, i);
     assert forall k:: k in indices_of_i ==> k < |p.commands| && inside_the_indices(p, next_command_indices, i);
     assert forall k:: k in indices_of_i ==> i>k && k in next_command_indices;
@@ -730,27 +309,12 @@ method Compile(p: Program)  returns (result: IntermediateRep)
     assert j < |next_command_indices| ==> next_command_indices[j]==i;
     assert in_bounds_commands(p, next_command_indices); 
     in_bounds_commands_implies_not_in(p, next_command_indices, i);
-    // interpret_changes_correct(p, next_command_indices, i);
-    // assert i >= |p.commands| ==> !(i in next_command_indices);
 
-/*    
-    invariant forall k:: k in indices_of_i ==> k in next_command_indices
-    invariant i >= |p.commands| ==> !(i in next_command_indices)
-    invariant i >= |p.commands| ==> j >= |next_command_indices|
-    invariant j <= |next_command_indices| && indices_of_i == next_command_indices[..j]
-    invariant !(i in indices_of_i)
-*/
 
   }
-  // assert j <= |next_command_indices| && indices_of_i == next_command_indices[..j];
-  // assert j == |indices_of_i|;
-  // // assert i == |p.commands|;
-  // assert j >= |next_command_indices|;
-
   length_constraints(j, indices_of_i, next_command_indices);
   assert |indices_of_i| == |commands|;
   assert |commands| == |next_command_indices|;
-  // assert forall i:: 0<=i<|commands| ==> 0<=Changes(p)[i] < |p.commands|;
   result := CreateFinalIR(p, commands);
   return result;
 }

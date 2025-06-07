@@ -41,7 +41,7 @@ module Trivial{
         requires 0<= index < |ir|
         requires 0<= index < |changes|
         requires 0<= changes[index] < |p.commands|
-        requires forall d:: 0<= d < |changes| ==> 0<= changes[d] < |p.commands|
+        requires changes_correct(p, changes)
         requires p.commands[changes[index]] == '['
         requires matched_forall_loop(p, ir, changes, index)
         requires ir[index] == Jump(dest, true)
@@ -142,6 +142,59 @@ module Trivial{
         ensures matched_command_with_ir(p, ir, index, changes)
         ensures matched_forall_loop(p, ir, changes, index+1)
     {}
+
+    lemma IncreasingArrayKeepsValid(ir: seq<Instr>)
+    requires |ir| >= 1
+    requires valid_ir_commands(ir[..|ir|-1])
+    requires match ir[|ir|-1]
+    case Inc(_) => true
+    case _ => false
+    ensures valid_ir_commands(ir)
+    {}
+
+    lemma IncreasingArrayKeepsValidMove(ir: seq<Instr>)
+    requires |ir| >= 1
+    requires valid_ir_commands(ir[..|ir|-1])
+    requires match ir[|ir|-1]
+    case Move(_) => true
+    case _ => false
+    ensures valid_ir_commands(ir)
+    {}
+
+    lemma IncreasingArrayKeepsValidIO(ir: seq<Instr>)
+    requires |ir| >= 1
+    requires valid_ir_commands(ir[..|ir|-1])
+    requires ir[|ir|-1] == Print || ir[|ir|-1] == UserInput
+    ensures valid_ir_commands(ir)
+    {}
+
+    lemma IncreasingArrayKeepsValidJumpOne(ir: seq<Instr>)
+    requires |ir| >= 1
+    requires valid_ir_commands(ir[..|ir|-1])
+    requires ir[|ir|-1] == Jump(0, true)
+    ensures valid_ir_commands(ir)
+    {}
+
+
+
+    lemma MatchedForallImpliesMatchedOne(p: Program, commands: seq<Instr>, indices: seq<int>, j: int)
+    requires valid_program(p)
+    requires 0 <= j 
+    requires 0 <= j+1 <= |indices|
+    requires 0 <= j+1 <= |commands|
+    requires indices == Changes(p)
+    requires changes_correct(p, indices)
+    requires matched_forall_loop(p, commands, indices, j+1)
+    ensures matched_command_with_ir(p, commands, j, indices)
+    {}
+
+    lemma IncreasingArrayKeepsValidJumpTwo(ir: seq<Instr>)
+    requires |ir| >= 1
+    requires valid_ir_commands(ir[..|ir|-1])
+    requires ir[|ir|-1] == Jump(0, false)
+    ensures valid_ir_commands(ir)
+    {}
+
 
     lemma AndIsImplicationMinus(p: Program, ir: seq<Instr>, index: int, changes: seq<int>, k: int)
         requires valid_program(p)

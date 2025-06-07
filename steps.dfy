@@ -161,20 +161,6 @@ module Steps{
     }
 
 
-// function count_commands(p: Program, p': Program, symbol: char): int
-//     requires p.pointer <= p'.pointer <= |p.commands|
-//     requires |p.commands| > 0
-//     requires aligned_programs(p, p')
-//     decreases p'.pointer-p.pointer
-// {
-//     if p.pointer == p'.pointer then 0
-//     // else if p.pointer + 1 >= p'.pointer then 0
-//     else
-//         assert p.pointer < |p.commands|;
-//         (if p.commands[p.pointer] == symbol then
-//             1) +
-//          count_commands(p.(pointer := p.pointer + 1), p', symbols)
-// }
 
     ghost predicate program_k_max_steps(p: Program, s: State, p': Program, s': State, k: int)
     requires 0<= k
@@ -189,51 +175,5 @@ module Steps{
         &&
         (k >= |Changes(p)| ==> max_steps(Program(p.commands, |p.commands|, p.input), s, p', s'))
     }
-
-/*    ghost predicate program_k_max_steps(p: Program, s: State, p': Program, s': State, k: int)
-    decreases k
-    requires 0<= k
-    requires valid_program(p)
-    requires state_reqs(s)
-    {
-    if k==0 then 
-        p == p' && s == s' 
-    else 
-        exists p'': Program, s'': State:: (valid_state(s, s'') && state_reqs(s'') && aligned_programs(p, p'') && valid_program(p'') && max_steps(p, s, p'', s'') &&
-        p.pointer <= |p.commands| && program_k_max_steps(p'', s'', p', s', k-1))
-    }
-
-    ghost predicate ir_k_steps(ir: IntermediateRep, s: State, ir': IntermediateRep, s': State, k: int)
-    decreases k
-    requires 0<= k
-    // requires valid_program(p)
-    requires state_reqs(s)
-    requires valid_ir(ir)
-    requires valid_input(ir.input)
-    requires valid_ir(ir')
-    requires valid_input(ir'.input)
-    {
-    if k==0 then
-        ir == ir' && s == s' 
-    else 
-        exists ir'': IntermediateRep, s'': State :: (valid_state(s, s'') && state_reqs(s'') && in_sync_irs(ir, ir'') && valid_ir(ir'') && ir_step(ir, s, ir'', s'') && valid_input(ir''.input)&&
-        ir_k_steps(ir'', s'', ir', s', k-1))
-    }
-
-    ghost predicate StepsForBoth(p: Program, s: State, ir: IntermediateRep)
-    requires valid_program(p)
-    requires state_reqs(s)
-    requires valid_ir(ir)
-    requires valid_input(ir.input)
-    {
-        // true
-        //Idea: forall i:: 0 <= i < |ir| ==> if program can transition from i to i+1, then ir can as well
-        // forall i:: 0 <= i < |ir.commands| ==> exists p': Program, s': State, irS: State, ir': IntermediateRep:: valid_program(p') && state_reqs(s')  && program_k_max_steps(p, s, p', s', i) && state_reqs(irS) && valid_ir(ir') && valid_input(ir'.input) && ir_k_steps(ir, s, ir', irS, i) //&& s'==irS
-// (        forall i:: 0 <= i < |ir.commands| ==> exists p': Program, s': State:: valid_program(p') && state_reqs(s')  && program_k_max_steps(p, s, p', s', i)
-// )        && forall i:: 0 <= i < |ir.commands| ==> exists ir': IntermediateRep, s1: State:: state_reqs(s1) && valid_ir(ir') && valid_input(ir'.input) && ir_k_steps(ir, s, ir', s1, i)
-
-(        forall i:: 0 <= i < |ir.commands| ==> exists p': Program, s': State, ir': IntermediateRep, s1: State:: valid_program(p') && state_reqs(s')  && program_k_max_steps(p, s, p', s', i) && state_reqs(s1) && valid_ir(ir') && valid_input(ir'.input) && ir_k_steps(ir, s, ir', s1, i))
-    }
-*/
 
 }

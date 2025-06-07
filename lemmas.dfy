@@ -64,6 +64,24 @@ module Lemmas{
       requires matched_forall_loop(p, ir1, next_command_indices, j)
       ensures matched_forall_loop(p, ir2, next_command_indices, j)
       {}
+    lemma ReplacingEndJumpWithJump(p: Program, ir1: seq<Instr>, ir2: seq<Instr>, i: int, next_command_indices: seq<int>, j: int)
+      requires |ir1| == |ir2|
+      requires 0 <= i < |ir1|
+      requires forall k:: 0<= k < |ir1| && k!=i ==> ir1[k]==ir2[k]
+      requires match ir1[i]
+              case Jump(_, false) => true
+              case _ => false
+      requires match ir2[i]
+            case Jump(_, false) => true
+            case _ => false
+      requires next_command_indices == Changes(p)
+      requires changes_correct(p, next_command_indices)
+      requires valid_program(p)
+      requires 0 <= j <= |next_command_indices|
+      requires 0 <= j <= |ir1|
+      requires matched_forall_loop(p, ir1, next_command_indices, j)
+
+      {}
 
     lemma ZeroAndRest(p: Program, i: int, res: seq<int>, temp: seq<int>)
     requires 0 <= i < |p.commands|
@@ -752,7 +770,21 @@ module Lemmas{
     }
 
 
-
+    lemma AlignmentMeansEquivalenceAllStates(p: Program, ir: IntermediateRep)
+    requires valid_program(p)
+    requires valid_ir(ir)
+    requires valid_input(ir.input) 
+    requires ir.input == p.input
+    requires valid_input(p.input)
+    requires aligned_instructions(p, ir)
+    ensures FullEquivalence(p, ir)
+    {
+      forall s | state_reqs(s)
+      ensures EquivalentReps(p, s, ir)
+      {
+        AlignmentMeansEquivalence(p, s, ir);
+      }
+    }
 
     lemma AlignmentMeansEquivalence(p: Program, s: State, ir: IntermediateRep)
     requires valid_program(p)
@@ -949,20 +981,8 @@ lemma MaxStepsPlusMinus(p: Program, s: State)
         i := i+1;
     }
     var mem := s.memory;
-    // var newVal := s.memory[s.pointer];
-    // assert enough_input(p);
-    /*assert forall j:: p.pointer <= j < i ==> p.commands[j] != ',';
-    var s2 := set j| p.pointer <= j < i && p.commands[j]==',';
-    assert forall j:: p.pointer <= j < i ==> (!(j in s2));
-    var s3 := set j | i <= j < |p.commands| && p.commands[j] == ',';
-    var s4 := set j | p.pointer <= j < |p.commands| && p.commands[j]==',';
-    assert s4 == s2+s3;
-    assert |s4| == |s2|+|s3|;
-    // assert forall j :: p.pointer <= j < i ==> !(j in s2);
-    assert |s2|==0;*/
     var p' := Program(p.commands, i, p.input);
-    // assert enough_input(p');
-    // count := count_commands(p, p', ['+', '-']);
+
     if p.commands[p.pointer] == '+'{
       mem :=   mem[..s.pointer] + [(s.memory[s.pointer]+p'.pointer-p.pointer)%256] + mem[s.pointer+1..];
       assert mem[s.pointer] == (s.memory[s.pointer]+p'.pointer-p.pointer)%256;
@@ -1258,7 +1278,7 @@ lemma bigger_step_within_range(p: Program, i: int, k: int, next_command_indices:
 requires 0<= i < |p.commands|
 requires k== count_consecutive_symbols(p, i)
 requires next_command_indices == Changes(p)
-requires p.commands[i]=='<' || p.commands[i] == '>' || p.commands[i] == '+'
+requires p.commands[i]=='<' || p.commands[i] == '>'
 requires changes_correct(p, next_command_indices)
 ensures i in next_command_indices ==> next_step(p, i, k, next_command_indices)
 {
@@ -1285,7 +1305,6 @@ requires 0<= bound < |changes|
 requires 0<= changes[bound] < |p.commands|
 requires forall d:: 0<= d < |changes| ==> 0<= changes[d] < |p.commands|
 requires matched_forall_loop(p, ir[..bound], changes, bound)
-
 ensures matched_forall_loop(p, ir, changes, bound)
 {
   forall l| 0<= l < bound
