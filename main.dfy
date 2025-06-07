@@ -331,10 +331,44 @@ ensures valid_loop_program(p)
   p := Program(commands, 0, input);
 
 }  
-  method Main()
-    ensures true  
+
+method IRtoString(ir: IntermediateRep)
+{
+  var i := 0;
+  while i < |ir.commands|
+  decreases |ir.commands|-i
   {
-    print "Hello, World!\n";
+
+    {match ir.commands[i]
+      case Inc(k) => {
+        print i, ": Inc(", k, ")";
+      }
+      case Move(k) => {
+        print i, ": Move(", k, ")";
+      }
+      case Print => {
+        print i, ": Print";
+      }
+      case UserInput => {
+        print i, ": UserInput";
+      }
+      case Jump(dest, dir) => {
+        print i, ": Jump(", dest, ", ", dir, ")";
+      }
+    }
+    if i == ir.pointer {
+      print " <--";
+    }
+    print "\n";
+    i := i+1;
   }
+  print "User Input: ";
+  i := 0;
+  while i < |ir.input| {
+    print ir.input[i];
+    i := i+1;
+  }
+  print "\n";
+}
 
 }
