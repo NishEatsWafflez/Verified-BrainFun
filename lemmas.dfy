@@ -124,24 +124,41 @@ module Lemmas{
     requires change_helper_correct(p, i+k, temp)
     requires temp == res[1..]
     requires (p.commands[i] in ['+', '-', '>', '<'])
-    requires (forall d:: (d in res[1..] && p.commands[d] in ['+', '-', '<', '>']) ==> ((d+count_consecutive_symbols(p, d) == |p.commands|) || d+count_consecutive_symbols(p, d) in res[1..]))
+    requires ((forall d:: (d in res[1..] && p.commands[d] in ['+', '-', '<', '>']) ==> ((d+count_consecutive_symbols(p, d) == |p.commands|) || d+count_consecutive_symbols(p, d) in res[1..])))
+
+    // requires (forall d:: (d in res[1..] && p.commands[d] in ['+', '-', '<', '>']) ==> ((d+count_consecutive_symbols(p, d) == |p.commands|&& !(d+count_consecutive_symbols(p, d) in res[1..])) || (d+count_consecutive_symbols(p, d) < |p.commands| && d+count_consecutive_symbols(p, d) in res[1..])))
     requires ((p.commands[res[0]] in ['+', '-', '<', '>'])) ==> res[0] + k == |p.commands| || res[0]+k in temp
-     ensures (forall d:: (d in res && (p.commands[d] in ['+', '-', '<', '>'])) ==> ((d+count_consecutive_symbols(p, d) == |p.commands| && !(d+count_consecutive_symbols(p, d) in res)) || (d+count_consecutive_symbols(p, d) < |p.commands| && d+count_consecutive_symbols(p, d) in res)))
+    ensures ((forall d:: (d in res && p.commands[d] in ['+', '-', '<', '>']) ==> ((d+count_consecutive_symbols(p, d) == |p.commands|) || d+count_consecutive_symbols(p, d) in res)))
+    // ensures forall d:: (d in res && p.commands[d] in ['+', '-', '<', '>']) ==> ((d+count_consecutive_symbols(p, d) == |p.commands| && !(d+count_consecutive_symbols(p, d) in res)) || (d+count_consecutive_symbols(p, d) < |p.commands| && d+count_consecutive_symbols(p, d) in res))
+
+    //  ensures (forall d:: (d in res && (p.commands[d] in ['+', '-', '<', '>'])) ==> ((d+count_consecutive_symbols(p, d) == |p.commands| && !(d+count_consecutive_symbols(p, d) in res)) || (d+count_consecutive_symbols(p, d) < |p.commands| && d+count_consecutive_symbols(p, d) in res)))
     {
       forall d| d in res
-      ensures (p.commands[d] in ['+', '-', '<', '>']) ==> ((d+count_consecutive_symbols(p, d) == |p.commands| && !(d+count_consecutive_symbols(p, d) in res)) || (d+count_consecutive_symbols(p, d) < |p.commands| && d+count_consecutive_symbols(p, d) in res))
+      ensures (p.commands[d] in ['+', '-', '<', '>']) ==> ((d+count_consecutive_symbols(p, d) == |p.commands|) || d+count_consecutive_symbols(p, d) in res)
+        //p.commands[d] in ['+', '-', '<', '>']) ==> ((d+count_consecutive_symbols(p, d) == |p.commands| && !(d+count_consecutive_symbols(p, d) in res)) || (d+count_consecutive_symbols(p, d) < |p.commands| && d+count_consecutive_symbols(p, d) in res))
       {
         if d in res[1..]{
-          if (p.commands[d] in ['+', '-', '<', '>']){
-            assert ((d+count_consecutive_symbols(p, d) == |p.commands|) || d+count_consecutive_symbols(p, d) in res[1..]);
-            assert ((d+count_consecutive_symbols(p, d) == |p.commands|) || d+count_consecutive_symbols(p, d) in res);
-          }
-        }
-        else if d == res[0]{
           if (p.commands[d] in ['+', '-', '<', '>']){
             assert ((d+count_consecutive_symbols(p, d) == |p.commands|) || d+count_consecutive_symbols(p, d) in temp);
             assert ((d+count_consecutive_symbols(p, d) == |p.commands|) || d+count_consecutive_symbols(p, d) in res[1..]);
             assert ((d+count_consecutive_symbols(p, d) == |p.commands|) || d+count_consecutive_symbols(p, d) in res);
+          }
+        }
+        else {
+          assert d == res[0];
+          if (p.commands[res[0]] in ['+', '-', '<', '>']){
+            assert d == i;
+            assert k == count_consecutive_symbols(p, d);
+            assert res[0] + k == |p.commands| || res[0]+k in temp;
+            assert d== res[0];
+            // assume {:axiom} false;
+            // assert d + k == |p.commands| || d + k in temp;
+            // assert d + k == |p.commands| || d+k in res[1..];
+            // assert d + k == |p.commands| || d + k in res;
+            // assert ((d+count_consecutive_symbols(p, d) == |p.commands|) || d+count_consecutive_symbols(p, d) in temp);
+            // assert ((d+count_consecutive_symbols(p, d) == |p.commands|) || d+count_consecutive_symbols(p, d) in res[1..]);
+            // assert ((d+count_consecutive_symbols(p, d) == |p.commands|) || d+count_consecutive_symbols(p, d) in res);
+            EqualityPreservedUnderBasicAddition(res, d, k, p, temp);
           }
         }
       }
@@ -282,7 +299,7 @@ module Lemmas{
       assert (forall d:: (d in res[1..] && p.commands[d] in ['+', '-', '<', '>']) ==> ((d+count_consecutive_symbols(p, d) == |p.commands|) || d+count_consecutive_symbols(p, d) in res[1..]));
       assert ((p.commands[res[0]] in ['+', '-', '<', '>'])) ==> res[0] + k == |p.commands| || res[0]+k in temp;
       ZeroAndRestBigStep(p, i, res, temp, k);
-      assert (forall d:: (d in res && (p.commands[d] in ['+', '-', '<', '>'])) ==> ((d+count_consecutive_symbols(p, d) == |p.commands| && !(d+count_consecutive_symbols(p, d) in res)) || (d+count_consecutive_symbols(p, d) < |p.commands| && d+count_consecutive_symbols(p, d) in res)));
+      // assert (forall d:: (d in res && (p.commands[d] in ['+', '-', '<', '>'])) ==> ((d+count_consecutive_symbols(p, d) == |p.commands| && !(d+count_consecutive_symbols(p, d) in res)) || (d+count_consecutive_symbols(p, d) < |p.commands| && d+count_consecutive_symbols(p, d) in res)));
 
       assert (forall d:: (0<= d <|temp|-1 && !(p.commands[temp[d]] in ['+', '-', '<', '>']))==> (temp[d+1]-temp[d] ==1));
       BigStepHelper(p, i, res, temp, k);
@@ -812,7 +829,8 @@ module Lemmas{
             AlignmentMeansEquivalenceMoves(p, s, ir, i);          
           }
           case Print =>{
-            var p_by_k := Program(p.commands, index, p.input);
+            AlignmentMeansEquivalencePrint(p, s, ir, i);
+/*            var p_by_k := Program(p.commands, index, p.input);
             MaxSteps(p_by_k, s);
             assert exists p': Program, s': State ::  valid_program(p') &&  state_reqs(s') &&  valid_state(s, s') &&  aligned_programs(p_by_k, p') && max_steps(p_by_k, s, p', s')  && valid_input(p'.input);
             var p': Program, s': State :| valid_program(p') &&  state_reqs(s') &&  valid_state(s, s') &&  aligned_programs(p_by_k, p') && max_steps(p_by_k, s, p', s')  && valid_input(p'.input);
@@ -820,7 +838,7 @@ module Lemmas{
             IrStep(currIr, s);  
             var ir': IntermediateRep, sIR :|valid_state(s, sIR) && state_reqs(sIR) && in_sync_irs(currIr, ir') && valid_ir(ir') && ir_step(currIr, s, ir', sIR) && valid_input(ir'.input);
             assert sIR.memory == s.memory;
-            assert sIR == s';          
+            assert sIR == s';          */
           }
           case UserInput =>{
             var p_by_k := Program(p.commands, index, p.input);
@@ -840,8 +858,35 @@ module Lemmas{
       assert EquivalentReps(p, s, ir);
 
     }
+lemma AlignmentMeansEquivalencePrint(p: Program, s: State, ir: IntermediateRep, i: int)
+ requires valid_program(p)
+    requires state_reqs(s)
+    requires valid_ir(ir)
+    requires valid_input(ir.input) 
+    requires ir.input == p.input
+    requires valid_input(p.input)
+    requires aligned_instructions(p, ir)
+    requires 0 <= i < |ir.commands|
+    requires match ir.commands[i] {
+      case Print => true
+      case _ => false
+    }    
+      ensures exists p': Program, s': State, ir': IntermediateRep, sIR: State:: valid_program(p') && aligned_programs(p, p') && valid_state(s, s') && state_reqs(s')  && program_k_max_steps(p, s, p', s', i) && state_reqs(sIR) && valid_state(s, sIR) && valid_ir(ir') && valid_input(ir'.input) && ir_step(IntermediateRep(ir.commands, i, ir.input), s, ir', sIR) && s'==sIR 
+   {
+        var indices := Changes(p);      
+        var currIr := IntermediateRep(ir.commands, i, ir.input);
+        var index := indices[i];
+        var p_by_k := Program(p.commands, index, p.input);
+        MaxSteps(p_by_k, s);
+        assert exists p': Program, s': State ::  valid_program(p') &&  state_reqs(s') &&  valid_state(s, s') &&  aligned_programs(p_by_k, p') && max_steps(p_by_k, s, p', s')  && valid_input(p'.input);
+        var p': Program, s': State :| valid_program(p') &&  state_reqs(s') &&  valid_state(s, s') &&  aligned_programs(p_by_k, p') && max_steps(p_by_k, s, p', s')  && valid_input(p'.input);
+        assert max_steps(p_by_k,s, p', s');
+        IrStep(currIr, s);  
+        var ir': IntermediateRep, sIR :|valid_state(s, sIR) && state_reqs(sIR) && in_sync_irs(currIr, ir') && valid_ir(ir') && ir_step(currIr, s, ir', sIR) && valid_input(ir'.input);
+        assert sIR.memory == s.memory;
+        assert sIR == s';          
 
-
+   }
 
 lemma IrStep(ir: IntermediateRep, s: State)
     requires state_reqs(s)

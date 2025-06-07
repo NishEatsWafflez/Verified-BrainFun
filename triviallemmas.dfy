@@ -17,8 +17,17 @@ module Trivial{
         ensures p[i-1]==p[k]
     {}
 
-
-
+    lemma EqualityPreservedUnderBasicAddition(res: seq<int>, d: int, k: int, p: Program, temp: seq<int>)
+        requires |res| > 0
+        requires temp == res[1..]
+        requires res[0] + k == |p.commands| || res[0]+k in temp
+        requires d in res
+        requires 0 <= d < |p.commands|
+        requires k == count_consecutive_symbols(p, d)
+        requires d== res[0]
+        ensures  ((d+count_consecutive_symbols(p, d) == |p.commands|) || d+count_consecutive_symbols(p, d) in res)
+        {}
+        
     lemma AndIsImplicationMoveBackwards(p: Program, ir: seq<Instr>, index: int, changes: seq<int>, k: int)
         requires valid_program(p)
         requires changes == Changes(p)

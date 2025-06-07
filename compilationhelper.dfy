@@ -33,7 +33,6 @@ module CompilationHelper{
     requires valid_program(p)
     requires next_command_indices == Changes(p)
     requires |p.commands| > 0
-    requires |p.input| == |p.commands|
     requires p.pointer == 0
     requires valid_input(p.input)
     requires |commands|>=0
@@ -140,7 +139,6 @@ module CompilationHelper{
     requires valid_program(p)
     requires next_command_indices == Changes(p)
     requires |p.commands| > 0
-    requires |p.input| == |p.commands|
     requires p.pointer == 0
     requires valid_input(p.input)
     requires |commands|>=0
@@ -247,7 +245,6 @@ module CompilationHelper{
     requires valid_program(p)
     requires next_command_indices == Changes(p)
     requires |p.commands| > 0
-    requires |p.input| == |p.commands|
     requires p.pointer == 0
     requires valid_input(p.input)
     requires |commands|>=0
@@ -357,7 +354,6 @@ module CompilationHelper{
     requires valid_program(p)
     requires next_command_indices == Changes(p)
     requires |p.commands| > 0
-    requires |p.input| == |p.commands|
     requires p.pointer == 0
     requires valid_input(p.input)
     requires |commands|>=0
@@ -464,7 +460,6 @@ module CompilationHelper{
     requires valid_program(p)
     requires next_command_indices == Changes(p)
     requires |p.commands| > 0
-    requires |p.input| == |p.commands|
     requires p.pointer == 0
     requires valid_input(p.input)
     requires |commands|>=0
@@ -572,7 +567,6 @@ module CompilationHelper{
     requires valid_program(p)
     requires next_command_indices == Changes(p)
     requires |p.commands| > 0
-    requires |p.input| == |p.commands|
     requires p.pointer == 0
     requires valid_input(p.input)
     requires |commands|>=0
@@ -678,7 +672,6 @@ module CompilationHelper{
     requires valid_program(p)
     requires next_command_indices == Changes(p)
     requires |p.commands| > 0
-    requires |p.input| == |p.commands|
     requires p.pointer == 0
     requires valid_input(p.input)
     requires |commands|>=0

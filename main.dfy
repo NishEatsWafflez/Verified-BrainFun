@@ -77,7 +77,7 @@ method Compile(p: Program)  returns (result: IntermediateRep)
   requires valid_program(p)
   requires |p.commands| > 0
   requires valid_loop_program(p)
-  requires |p.input| == |p.commands|
+  // requires |p.input| == |p.commands|
   requires p.pointer == 0
   requires valid_input(p.input)
   
@@ -177,7 +177,7 @@ method Compile(p: Program)  returns (result: IntermediateRep)
       assert valid_program(p);
       assert next_command_indices == Changes(p);
       assert |p.commands| > 0;
-      assert |p.input| == |p.commands|;
+      // assert |p.input| == |p.commands|;
       assert p.pointer == 0;
       assert valid_input(p.input);
       assert |commands|>=0;
@@ -319,6 +319,18 @@ method Compile(p: Program)  returns (result: IntermediateRep)
   return result;
 }
 
+method CompileFromString (commands: seq<char>, input: seq<char>) returns (p: Program)
+requires valid_input(input)
+requires (forall i:: (0<= i < |commands| ==> commands[i] in [',', '[', ']', '.', '+', '-', '>', '<']))
+requires |commands| > 0
+requires valid_loop_program_helper(commands, 0, 0)
+requires valid_loop(commands)
+ensures valid_program(p)
+ensures valid_loop_program(p)
+{
+  p := Program(commands, 0, input);
+
+}  
   method Main()
     ensures true  
   {
