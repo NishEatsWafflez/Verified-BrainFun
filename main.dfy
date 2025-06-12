@@ -77,7 +77,6 @@ method Compile(p: Program)  returns (result: IntermediateRep)
   requires valid_program(p)
   requires |p.commands| > 0
   requires valid_loop_program(p)
-  // requires |p.input| == |p.commands|
   requires p.pointer == 0
   requires valid_input(p.input)
   
@@ -85,7 +84,6 @@ method Compile(p: Program)  returns (result: IntermediateRep)
   ensures valid_input(result.input)
   ensures valid_loop_ir(result)
   ensures FullEquivalence(p, result)
-
 {
   var i: int := 0;
   var j: int := 0;

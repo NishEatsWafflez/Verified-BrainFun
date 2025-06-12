@@ -50,7 +50,7 @@ ghost predicate within_bounds(k: int, b: int){
     0<=k<b
 }
 
-ghost predicate matched_command_with_ir(p: Program, ir: seq<Instr>, index: int, changes: seq<int>)
+predicate matched_command_with_ir(p: Program, ir: seq<Instr>, index: int, changes: seq<int>)
 requires valid_program(p)
 requires changes == Changes(p)
 requires 0<= index < |changes|
@@ -65,17 +65,11 @@ match ir[index]
     case UserInput => p.commands[changes[index]] == ','
     case Print => p.commands[changes[index]] == '.'
     case Jump(dest, false) => (
-        (p.commands[changes[index]] == ']')
-        // && p.commands[changes[dest]] == '[' && ir[dest] == Jump(index, true))
-        // && valid_loop(p.commands[changes[dest]+1.. changes[index]])
-        )
-    case Jump(dest, true)=>
-         (
-            p.commands[changes[index]] == '['
-            
-            )
-            
-    
+        p.commands[changes[index]] == ']'
+    )
+    case Jump(dest, true)=> (
+        p.commands[changes[index]] == '['
+    )
 }
 
 ghost predicate aligned_instructions_subseq(p: Program, ir: seq<Instr>)
@@ -91,8 +85,7 @@ ghost predicate aligned_instructions_subseq(p: Program, ir: seq<Instr>)
     } 
 
 
-ghost predicate aligned_instructions(p: Program, ir: IntermediateRep)
-    // requires forall i:: 0 <= i < |p.commands| ==> 0<= Changes(p)[i] < |p.commands|
+predicate aligned_instructions(p: Program, ir: IntermediateRep)
     requires valid_program(p)
     requires valid_ir(ir)
     {
@@ -101,8 +94,6 @@ ghost predicate aligned_instructions(p: Program, ir: IntermediateRep)
             0<=Changes(p)[i] < |p.commands| &&
             matched_command_with_ir(p, ir.commands, i, Changes(p))
         )
-
     } 
-
 }
 
